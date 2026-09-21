@@ -1,2 +1,4 @@
-# mygym
-Aplicació de seguiment de les rutines de gimnàs
+# MY GYM
+Aplicació de seguiment de les rutines de gimnàs.
+
+

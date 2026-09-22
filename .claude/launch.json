@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mygym-preview",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "preview"],
+      "port": 4173
+    },
+    {
+      "name": "mygym-dev",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "dev"],
+      "port": 3000
+    }
+  ]
+}

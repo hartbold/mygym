@@ -1,0 +1,14 @@
+<!-- Sense cantonades arrodonides (l'OS aplica la seva pròpia màscara) i amb
+     el glif dins el 80% central de seguretat, per a `purpose: "maskable"`. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#4f46e5"/>
+  <g stroke="#ffffff" stroke-width="28" stroke-linecap="round">
+    <line x1="176" y1="256" x2="336" y2="256"/>
+  </g>
+  <g fill="#ffffff">
+    <rect x="128" y="196" width="48" height="120" rx="14"/>
+    <rect x="100" y="220" width="26" height="72" rx="8"/>
+    <rect x="336" y="196" width="48" height="120" rx="14"/>
+    <rect x="386" y="220" width="26" height="72" rx="8"/>
+  </g>
+</svg>

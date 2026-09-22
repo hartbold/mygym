@@ -1,0 +1,242 @@
+@import "tailwindcss";
+
+/*
+ * Sistema visual inspirat en iOS (mode clar): fons agrupat gris, targetes
+ * blanques, separadors fins, un sol color d'acció (negre) i verd només per
+ * a l'estat «en curs». Tots els colors viuen aquí com a variables perquè un
+ * futur mode fosc només hagi de redefinir-les.
+ */
+:root {
+  --canvas: #f2f2f7;
+  --surface: #ffffff;
+  --label: #000000;
+  /* Una mica més fosc que el secondaryLabel d'iOS: es llegeix d'un cop d'ull al gimnàs. */
+  --label-2: rgb(60 60 67 / 0.72);
+  --label-3: rgb(60 60 67 / 0.36);
+  --label-4: rgb(60 60 67 / 0.18);
+  --separator: rgb(60 60 67 / 0.29);
+  --fill: rgb(120 120 128 / 0.2);
+  --fill-2: rgb(120 120 128 / 0.16);
+  --fill-3: rgb(118 118 128 / 0.12);
+  --fill-4: rgb(116 116 128 / 0.08);
+  --accent: #000000;
+  --on-accent: #ffffff;
+  --live: #34c759;
+  --live-ink: #1d7a35;
+  --danger: #ff3b30;
+  --danger-ink: #d70015;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-label: var(--label);
+  --color-label-2: var(--label-2);
+  --color-label-3: var(--label-3);
+  --color-label-4: var(--label-4);
+  --color-separator: var(--separator);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+  --color-fill-3: var(--fill-3);
+  --color-fill-4: var(--fill-4);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-live: var(--live);
+  --color-live-ink: var(--live-ink);
+  --color-danger: var(--danger);
+  --color-danger-ink: var(--danger-ink);
+
+  /* SF Pro a iPhone/Mac; Geist a la resta. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-geist-sans), system-ui, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Escala de Dynamic Type d'iOS (mida «Large», la per defecte). */
+@theme {
+  --text-largetitle: 2.125rem;
+  --text-largetitle--line-height: 2.5625rem;
+  --text-largetitle--letter-spacing: -0.012em;
+  --text-largetitle--font-weight: 700;
+  --text-title1: 1.75rem;
+  --text-title1--line-height: 2.125rem;
+  --text-title1--letter-spacing: -0.012em;
+  --text-title2: 1.375rem;
+  --text-title2--line-height: 1.75rem;
+  --text-title2--letter-spacing: -0.014em;
+  --text-title3: 1.25rem;
+  --text-title3--line-height: 1.5625rem;
+  --text-title3--letter-spacing: -0.016em;
+  --text-headline: 1.0625rem;
+  --text-headline--line-height: 1.375rem;
+  --text-headline--letter-spacing: -0.022em;
+  --text-headline--font-weight: 600;
+  --text-body: 1.0625rem;
+  --text-body--line-height: 1.375rem;
+  --text-body--letter-spacing: -0.022em;
+  --text-callout: 1rem;
+  --text-callout--line-height: 1.3125rem;
+  --text-callout--letter-spacing: -0.02em;
+  --text-subhead: 0.9375rem;
+  --text-subhead--line-height: 1.25rem;
+  --text-subhead--letter-spacing: -0.016em;
+  --text-footnote: 0.8125rem;
+  --text-footnote--line-height: 1.125rem;
+  --text-footnote--letter-spacing: -0.006em;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-caption--letter-spacing: 0em;
+  --text-caption2: 0.6875rem;
+  --text-caption2--line-height: 0.8125rem;
+  --text-caption2--letter-spacing: 0.006em;
+
+  /* Corba de les transicions de sistema d'iOS. */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --shadow-float: 0 10px 30px -10px rgb(0 0 0 / 0.28), 0 2px 6px -2px rgb(0 0 0 / 0.08);
+  --shadow-thumb: 0 3px 8px rgb(0 0 0 / 0.12), 0 3px 1px rgb(0 0 0 / 0.04);
+
+  --animate-live: live-pulse 2s var(--ease-ios) infinite;
+
+  @keyframes live-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgb(52 199 89 / 0.55);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 6px rgb(52 199 89 / 0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    background-color: var(--canvas);
+    color: var(--label);
+    color-scheme: light;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--canvas);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    letter-spacing: var(--text-body--letter-spacing);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* ≥16px: l'iPhone no fa zoom en enfocar un camp. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  input:focus-visible {
+    outline: none;
+  }
+}
+
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+
+@layer components {
+  /* Separadors interiors d'una llista agrupada: comencen on comença el text. */
+  .list-inset > li + li .cell {
+    border-top: 0.5px solid var(--separator);
+  }
+
+  /* Full inferior («sheet») amb l'animació de sistema d'iOS. */
+  .sheet {
+    translate: 0 100%;
+    transition:
+      translate 0.45s var(--ease-ios),
+      overlay 0.45s allow-discrete,
+      display 0.45s allow-discrete;
+  }
+
+  .sheet[open] {
+    translate: 0 0;
+  }
+
+  @starting-style {
+    .sheet[open] {
+      translate: 0 100%;
+    }
+  }
+
+  .sheet::backdrop {
+    background-color: rgb(0 0 0 / 0);
+    transition:
+      background-color 0.35s ease,
+      overlay 0.45s allow-discrete,
+      display 0.45s allow-discrete;
+  }
+
+  .sheet[open]::backdrop {
+    background-color: rgb(0 0 0 / 0.32);
+  }
+
+  @starting-style {
+    .sheet[open]::backdrop {
+      background-color: rgb(0 0 0 / 0);
+    }
+  }
+
+  @media (min-width: 40rem) {
+    .sheet {
+      translate: 0 0;
+      opacity: 0;
+      scale: 0.96;
+      transition:
+        scale 0.3s var(--ease-ios),
+        opacity 0.2s ease,
+        overlay 0.3s allow-discrete,
+        display 0.3s allow-discrete;
+    }
+
+    .sheet[open] {
+      opacity: 1;
+      scale: 1;
+    }
+
+    @starting-style {
+      .sheet[open] {
+        opacity: 0;
+        scale: 0.96;
+      }
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  .sheet,
+  .sheet::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

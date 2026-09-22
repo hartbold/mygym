@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { closeStaleActive, startEntry, type NewSetInput } from "@/lib/actions";
 import { CATALOG_SEED } from "@/lib/catalog-seed";
 import { db } from "@/lib/db";
-import { localDateKey, nowMs, parseDecimal } from "@/lib/dates";
+import { localDateKey, nowMs } from "@/lib/dates";
 import {
   durationParts,
   formatDayLabel,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/format";
 import { buildHash, parseHash, type Route, type View } from "@/lib/route";
 import { lastOccurrence, recentExercises, selectToday } from "@/lib/sessions";
+import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/set-draft";
 import type { Entry, ExerciseKind } from "@/lib/types";
 import { useNow } from "@/lib/useNow";
 import { EntryCard } from "./EntryCard";
@@ -46,25 +47,26 @@ import {
   StatGrid,
 } from "./ui";
 
-interface RowState {
-  weight: string;
-  reps: string;
-  min: string;
-  sec: string;
-}
-
-function emptyRow(): RowState {
-  return { weight: "", reps: "", min: "", sec: "" };
-}
+type RowState = SetDraft;
+const emptyRow = emptyDraft;
 
 function rowsFromLastOccurrence(entry: Entry): RowState[] {
-  return entry.sets.map((s) => ({
-    weight: s.weight !== undefined ? String(s.weight).replace(".", ",") : "",
-    reps: s.reps !== undefined ? String(s.reps) : "",
-    min: s.durationSec !== undefined ? String(Math.floor(s.durationSec / 60)) : "",
-    // "1:00", no "1:0": els segons sempre amb dues xifres (Number("00") === 0).
-    sec: s.durationSec !== undefined ? String(s.durationSec % 60).padStart(2, "0") : "",
-  }));
+  return entry.sets.map(draftFromSet);
+}
+
+/**
+ * Camps numèrics centrats de la taula de sèries: sense els 12px de farciment
+ * lateral de `FIELD` (a 320px, «min» no hi cabria) i amb el valor destacat.
+ */
+const NUM_FIELD = `${FIELD.replace(" px-3 ", " px-1 ")} text-center font-semibold`;
+
+/** Data relativa de la nota «Valors de l'última vegada (…)»: «avui», «ahir» o «dg 20 de setembre». */
+function prefillLabel(dateKey: string, now: number): string {
+  if (dateKey === localDateKey(now)) return "avui";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1); // dia de calendari, no 24 h (canvis d'hora)
+  if (dateKey === localDateKey(yesterday.getTime())) return "ahir";
+  return `${formatWeekdayShort(dateKey)} ${formatDayMonth(dateKey)}`;
 }
 
 const KIND_OPTIONS: { value: ExerciseKind; label: string }[] = [
@@ -132,7 +134,7 @@ function AvuiView({ entries, now, loaded }: { entries: Entry[]; now: number; loa
         loaded && (
           <div className="pt-[8dvh]">
             <EmptyState icon={<DumbbellIcon size={44} strokeWidth={1.5} />} title="Cap exercici avui">
-              Prem{" "}
+              Toca{" "}
               <span className="inline-grid size-4.5 place-items-center rounded-full bg-accent align-middle text-on-accent">
                 <PlusIcon size={12} strokeWidth={2.8} />
               </span>
@@ -227,6 +229,28 @@ export function AppShell() {
     window.location.hash = buildHash(next);
   }
 
+  /**
+   * Dia obert des de la llista de l'historial: «Torna a l'historial» hi torna
+   * enrere (pop) en lloc d'afegir una entrada nova, perquè el Enrere del
+   * sistema no torni a portar al dia que acabes de deixar.
+   */
+  const dayFromList = useRef<string | null>(null);
+
+  function openDayFromList(date: string) {
+    dayFromList.current = date;
+    navigate({ view: "sessio", date });
+  }
+
+  function backToHistorial() {
+    if (route.view === "sessio" && dayFromList.current === route.date) {
+      dayFromList.current = null;
+      window.history.back();
+    } else {
+      // Enllaç directe o recàrrega: no hi ha llista enrere; substitueix el dia.
+      window.location.replace(buildHash({ view: "historial" }));
+    }
+  }
+
   /** Pestanya: com a iOS, tocar la pestanya on ja ets torna a dalt (des d'un dia, torna a la llista). */
   function openTab(view: View) {
     if (route.view === view) scrollToTop();
@@ -249,6 +273,7 @@ export function AppShell() {
   /** El contingut del full passa per sota de la capçalera: hi apareix el separador. */
   const sheetBodyRef = useRef<HTMLDivElement>(null);
   const [sheetScrolled, setSheetScrolled] = useState(false);
+  const sheetTitleRef = useRef<HTMLHeadingElement>(null);
 
   /** Cada pas (i cada obertura) comença amunt. */
   function showStep(next: "pick" | "sets") {
@@ -283,6 +308,9 @@ export function AppShell() {
     setPrefillDate(prefill ? prefill.date : null);
     setFormError(null);
     showStep("sets");
+    // La fila tocada desapareix: el focus passa al títol (ara el nom de
+    // l'exercici) en lloc de caure a <body>. Sense teclat ni scroll.
+    requestAnimationFrame(() => sheetTitleRef.current?.focus({ preventScroll: true }));
   }
 
   function updateRow(i: number, patch: Partial<RowState>) {
@@ -301,31 +329,12 @@ export function AppShell() {
     if (!selected || openedAt === null || saving) return;
     const filled: NewSetInput[] = [];
     for (const row of rows) {
-      const weightEntered = row.weight.trim() !== "";
-      const weight = weightEntered ? parseDecimal(row.weight) : undefined;
-      if (weightEntered && weight === undefined) {
-        setFormError("El pes no és vàlid (fes servir coma o punt decimal).");
+      const parsed = parseSetDraft(selected.kind, row);
+      if (!parsed.ok) {
+        setFormError(parsed.error);
         return;
       }
-      if (selected.kind === "reps") {
-        if (row.reps.trim() === "") continue; // fila buida, s'ignora
-        const reps = Number(row.reps);
-        if (!Number.isInteger(reps) || reps < 1) {
-          setFormError("Les repeticions han de ser un número enter ≥ 1.");
-          return;
-        }
-        filled.push({ weight, reps });
-      } else {
-        if (row.min.trim() === "" && row.sec.trim() === "") continue; // fila buida
-        const min = row.min.trim() === "" ? 0 : Number(row.min);
-        const sec = row.sec.trim() === "" ? 0 : Number(row.sec);
-        const durationSec = min * 60 + sec;
-        if (!Number.isFinite(durationSec) || durationSec < 1) {
-          setFormError("La durada ha de ser d'almenys 1 segon.");
-          return;
-        }
-        filled.push({ weight, durationSec });
-      }
+      if (parsed.value) filled.push(parsed.value); // fila buida, s'ignora
     }
     if (filled.length === 0) {
       setFormError("Afegeix com a mínim una sèrie.");
@@ -368,7 +377,7 @@ export function AppShell() {
             onClick={() => pickExercise(o.name, o.kind)}
             trailing={
               o.kind === "time" ? (
-                <span aria-hidden="true" className="text-subhead text-label-3">
+                <span aria-hidden="true" className="text-subhead text-label-2">
                   Temps
                 </span>
               ) : undefined
@@ -380,6 +389,10 @@ export function AppShell() {
   }
 
   const isTime = selected?.kind === "time";
+  /** Capçalera i files de la taula de sèries comparteixen columnes: els títols queden centrats sobre els camps. */
+  const setCols = isTime
+    ? "grid-cols-[minmax(0,1fr)_minmax(0,2fr)_2.75rem]"
+    : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem]";
   const tabIsHistorial = route.view === "historial" || route.view === "sessio";
 
   return (
@@ -393,7 +406,7 @@ export function AppShell() {
             entries={entries}
             now={now}
             loaded={loaded}
-            onOpenDay={(date) => navigate({ view: "sessio", date })}
+            onOpenDay={openDayFromList}
           />
         )}
         {route.view === "sessio" && (
@@ -403,7 +416,7 @@ export function AppShell() {
             loaded={loaded}
             date={route.date && /^\d{4}-\d{2}-\d{2}$/.test(route.date) ? route.date : localDateKey(now)}
             onOpenDay={(date) => navigate({ view: "sessio", date })}
-            onBack={() => navigate({ view: "historial" })}
+            onBack={backToHistorial}
           />
         )}
         {route.view === "ajustos" && <Settings />}
@@ -463,7 +476,12 @@ export function AppShell() {
                   </IconButton>
                 )}
               </div>
-              <h2 id="sheet-title" className="truncate text-center text-headline">
+              <h2
+                id="sheet-title"
+                ref={sheetTitleRef}
+                tabIndex={-1}
+                className="truncate rounded-md text-center text-headline"
+              >
                 {step === "pick" ? "Nou exercici" : selected?.name}
               </h2>
               <IconButton label="Tanca" onClick={requestCloseSheet} className="justify-self-end">
@@ -515,34 +533,29 @@ export function AppShell() {
             ) : (
               selected && (
                 <Section
-                  footer={
-                    prefillDate &&
-                    `Valors de l'última vegada (${formatWeekdayShort(prefillDate)} ${formatDayMonth(prefillDate)}).`
-                  }
+                  footer={prefillDate && `Valors de l'última vegada (${prefillLabel(prefillDate, now)}).`}
                 >
                   <div className={`${CARD} overflow-hidden`}>
                     <div
                       aria-hidden="true"
                       className="flex items-end pt-3 pb-1 pl-2 text-caption font-semibold tracking-[0.02em] text-label-2 uppercase"
                     >
-                      <span className="w-10 shrink-0 text-center">Sèrie</span>
-                      <span className="flex min-w-0 flex-1 gap-2 pr-1 pl-2">
-                        <span className="flex-1 text-center">Kg</span>
-                        <span className={`${isTime ? "flex-[2]" : "flex-1"} text-center`}>
-                          {isTime ? "Temps" : "Reps"}
-                        </span>
-                        <span className="w-11 shrink-0" />
+                      <span className="w-12 shrink-0 text-center">Sèrie</span>
+                      <span className={`grid min-w-0 flex-1 gap-2 pr-1 ${setCols}`}>
+                        <span className="text-center">Kg</span>
+                        <span className="text-center">{isTime ? "Temps" : "Reps"}</span>
                       </span>
                     </div>
 
                     <ul>
                       {rows.map((row, i) => (
                         <li key={i} className="flex items-stretch pl-2">
-                          <span className="flex w-10 shrink-0 items-center justify-center text-subhead font-semibold text-label-2 tabular-nums">
+                          <span className="flex w-12 shrink-0 items-center justify-center text-subhead font-semibold text-label-2 tabular-nums">
                             {i + 1}
                           </span>
+                          {/* El separador comença on comencen els camps, com les files d'iOS. */}
                           <div
-                            className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-1 pl-2 ${
+                            className={`grid min-w-0 flex-1 items-center gap-2 py-1.5 pr-1 ${setCols} ${
                               i > 0 ? "border-t-[0.5px] border-separator" : ""
                             }`}
                           >
@@ -553,7 +566,7 @@ export function AppShell() {
                               aria-label={`Sèrie ${i + 1}, pes en kg`}
                               value={row.weight}
                               onChange={(e) => updateRow(i, { weight: e.target.value })}
-                              className={`${FIELD} flex-1 text-center font-semibold`}
+                              className={NUM_FIELD}
                             />
                             {selected.kind === "reps" ? (
                               <input
@@ -563,10 +576,10 @@ export function AppShell() {
                                 aria-label={`Sèrie ${i + 1}, repeticions`}
                                 value={row.reps}
                                 onChange={(e) => updateRow(i, { reps: e.target.value })}
-                                className={`${FIELD} flex-1 text-center font-semibold`}
+                                className={NUM_FIELD}
                               />
                             ) : (
-                              <span className="flex min-w-0 flex-[2] items-center gap-1">
+                              <span className="flex min-w-0 items-center gap-1">
                                 <input
                                   inputMode="numeric"
                                   autoComplete="off"
@@ -574,7 +587,7 @@ export function AppShell() {
                                   aria-label={`Sèrie ${i + 1}, minuts`}
                                   value={row.min}
                                   onChange={(e) => updateRow(i, { min: e.target.value })}
-                                  className={`${FIELD} flex-1 text-center font-semibold`}
+                                  className={`${NUM_FIELD} flex-1`}
                                 />
                                 <span aria-hidden="true" className="text-body font-semibold text-label-3">
                                   :
@@ -586,7 +599,7 @@ export function AppShell() {
                                   aria-label={`Sèrie ${i + 1}, segons`}
                                   value={row.sec}
                                   onChange={(e) => updateRow(i, { sec: e.target.value })}
-                                  className={`${FIELD} flex-1 text-center font-semibold`}
+                                  className={`${NUM_FIELD} flex-1`}
                                 />
                               </span>
                             )}
@@ -601,13 +614,13 @@ export function AppShell() {
                     <button
                       type="button"
                       onClick={addRow}
-                      className="flex h-12 w-full items-stretch pl-2 text-left text-body font-medium text-label transition-colors duration-150 active:bg-fill-4"
+                      className="flex h-12 w-full items-stretch pl-2 text-left text-body font-medium text-label transition-colors duration-150 focus-visible:-outline-offset-2 active:bg-fill-4"
                     >
-                      <span className="flex w-10 shrink-0 items-center justify-center">
+                      <span className="flex w-12 shrink-0 items-center justify-center">
                         <PlusIcon size={20} strokeWidth={2.2} />
                       </span>
                       <span
-                        className={`flex flex-1 items-center pl-2 ${
+                        className={`flex flex-1 items-center ${
                           rows.length > 0 ? "border-t-[0.5px] border-separator" : ""
                         }`}
                       >

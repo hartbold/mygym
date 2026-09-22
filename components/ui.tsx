@@ -6,6 +6,7 @@ import {
   useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
+  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from "./icons";
@@ -71,7 +72,9 @@ export function IconButton({
   const look =
     variant === "filled"
       ? "size-9 bg-fill-3 text-label active:bg-fill-2"
-      : "size-11 text-label-3 active:text-label-2";
+      : // Anell de focus a dins: les targetes (overflow-hidden) el retallarien.
+        // label-2/75 ≈ 3,3:1 sobre blanc: el mínim per a una icona que és l'únic contingut del botó.
+        "size-11 text-label-2/75 active:text-label focus-visible:-outline-offset-2";
   return (
     <button
       type="button"
@@ -130,7 +133,7 @@ export function NavHeader({
             : "border-transparent bg-transparent"
         }`}
       >
-        <div className="mx-auto grid h-12 max-w-lg grid-cols-[3rem_1fr_3rem] items-center px-2">
+        <div className="mx-auto grid h-12 max-w-lg grid-cols-[2.75rem_1fr_2.75rem] items-center gap-2 px-4">
           <div>
             {back && (
               <IconButton label={back.label} onClick={back.onClick}>
@@ -229,11 +232,12 @@ export function ListItem({
   return (
     <li>
       {onClick ? (
+        // Anell de focus a dins i arrodonit com la llista: `List` és overflow-hidden.
         <button
           type="button"
           onClick={onClick}
           aria-label={ariaLabel}
-          className="flex w-full items-stretch pl-4 text-left transition-colors duration-150 active:bg-fill-4"
+          className="flex w-full items-stretch pl-4 text-left transition-colors duration-150 focus-visible:-outline-offset-2 focus-visible:rounded-2xl active:bg-fill-4"
         >
           {content}
         </button>
@@ -292,13 +296,31 @@ export function SegmentedControl<T extends string>({
   value: T;
   onChange: (value: T) => void;
 }) {
+  // Patró de grup de ràdio: només l'opció triada és al Tab; les fletxes canvien d'opció.
+  const selectedIndex = options.findIndex((o) => o.value === value);
+  const tabStop = selectedIndex === -1 ? 0 : selectedIndex;
+
+  function onKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const step =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? 1
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (step === 0) return;
+    e.preventDefault();
+    const next = (index + step + options.length) % options.length;
+    onChange(options[next].value);
+    (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
+  }
+
   return (
     <div
       role="radiogroup"
       aria-label={label}
       className="grid auto-cols-fr grid-flow-col rounded-[9px] bg-fill-3 p-[2px]"
     >
-      {options.map((o) => {
+      {options.map((o, i) => {
         const selected = o.value === value;
         return (
           <button
@@ -306,9 +328,13 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={selected}
+            tabIndex={i === tabStop ? 0 : -1}
             onClick={() => onChange(o.value)}
-            className={`h-8 rounded-[7px] text-footnote font-semibold transition-[background-color,box-shadow] duration-200 ease-ios ${
-              selected ? "bg-surface text-label shadow-thumb" : "text-label active:opacity-60"
+            onKeyDown={(e) => onKeyDown(e, i)}
+            className={`h-8 rounded-[7px] text-footnote transition-[background-color,box-shadow] duration-200 ease-ios ${
+              selected
+                ? "bg-surface font-semibold text-label shadow-thumb"
+                : "font-medium text-label active:opacity-60"
             }`}
           >
             {o.label}
@@ -319,10 +345,13 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-/** Camp de cerca d'iOS (lupa + fons gris). */
+/**
+ * Camp de cerca d'iOS (lupa + fons gris). El botó natiu per buidar-lo es
+ * manté, però pintat com el cercle gris d'iOS (vegeu `app/globals.css`).
+ */
 export function SearchField(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
   return (
-    <label className="flex h-10 items-center gap-1.5 rounded-[10px] bg-fill-3 px-2.5 text-label-2">
+    <label className="flex h-10 items-center gap-1.5 rounded-[10px] bg-fill-3 px-2.5 text-label-2 transition-[box-shadow,background-color] duration-150 focus-within:bg-surface focus-within:ring-1 focus-within:ring-label-3">
       <SearchIcon size={18} strokeWidth={2} className="shrink-0" />
       <input
         type="search"

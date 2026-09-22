@@ -102,6 +102,30 @@ export async function addSet(entryId: string, set: NewSetInput, now: number): Pr
   });
 }
 
+/**
+ * «+ Sèrie» a la targeta: afegeix una còpia de l'última sèrie (o una de
+ * buida). Llegeix l'última dins de la mateixa escriptura, no de la UI:
+ * si l'usuari acaba d'editar-la, l'`updateSet` pendent ja s'hi ha aplicat
+ * (Dexie serialitza les transaccions d'escriptura de la mateixa taula).
+ * Torna la sèrie creada, o `undefined` si l'entrada ja no existeix.
+ */
+export async function duplicateLastSet(entryId: string, now: number): Promise<EntrySet | undefined> {
+  let created: EntrySet | undefined;
+  await db.entries.where("id").equals(entryId).modify((e) => {
+    const last = e.sets[e.sets.length - 1];
+    created = {
+      id: newId(),
+      weight: last?.weight,
+      reps: last?.reps,
+      durationSec: last?.durationSec,
+      doneAt: now,
+    };
+    e.sets.push(created);
+    e.updatedAt = now;
+  });
+  return created;
+}
+
 export async function updateSet(
   entryId: string,
   setId: string,

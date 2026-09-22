@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { backupFileName, buildBackup, importBackup, parseBackupFile } from "@/lib/backup";
 import { db } from "@/lib/db";
-import { nowMs } from "@/lib/dates";
+import { localDateKey, nowMs } from "@/lib/dates";
+import { formatDayMonth } from "@/lib/format";
+import { useNow } from "@/lib/useNow";
 import { CheckIcon, ExportIcon, ImportIcon, InstallIcon, StorageIcon, WarningIcon } from "./icons";
 import { List, ListItem, NavHeader, Page, Section } from "./ui";
 
@@ -45,13 +47,34 @@ function useInstallPrompt() {
   return event;
 }
 
-/** Rajola d'icona de la fila, com a Configuració d'iOS (sempre negra: un sol color d'acció). */
-function IconTile({ children }: { children: ReactNode }) {
+/**
+ * Rajola d'icona de la fila, com a Configuració d'iOS. Negra només a les
+ * files que fan alguna cosa (el negre vol dir «toca'm» a tota l'app);
+ * `muted` (gris) a les files que només informen d'un estat.
+ */
+function IconTile({ muted = false, children }: { muted?: boolean; children: ReactNode }) {
   return (
-    <span aria-hidden="true" className="grid size-7.5 place-items-center rounded-lg bg-accent text-on-accent">
+    <span
+      aria-hidden="true"
+      className={`grid size-7.5 place-items-center rounded-lg ${
+        muted ? "bg-fill-2 text-label-2" : "bg-accent text-on-accent"
+      }`}
+    >
       {children}
     </span>
   );
+}
+
+/**
+ * «Última còpia: avui / ahir / fa N dies.» Component a part perquè només
+ * aquesta línia es torni a pintar amb el rellotge (i canviï sola a mitjanit).
+ */
+function LastBackupNote({ at }: { at: number | null }) {
+  const now = useNow();
+  if (!at) return <p>Encara no has fet cap còpia de seguretat.</p>;
+  // `now` val 0 fins que el rellotge arrenca: data absoluta, mai «fa 20000 dies».
+  const when = now > 0 ? lastBackupLabel(at, now) : formatDayMonth(localDateKey(at));
+  return <p>Última còpia: {when}.</p>;
 }
 
 const TILE_ICON = { size: 18, strokeWidth: 2 } as const;
@@ -140,8 +163,8 @@ export function Settings() {
     await installEvent.prompt();
   }
 
-  const now = nowMs();
   const showIosWarning = isIos && !isStandalone;
+  const showInstallRow = isStandalone || installEvent !== null;
 
   return (
     <Page>
@@ -168,11 +191,7 @@ export function Settings() {
                   </p>
                 )}
               </div>
-              <p>
-                {lastBackupAt
-                  ? `Última còpia: ${lastBackupLabel(lastBackupAt, now)}.`
-                  : "Encara no has fet cap còpia de seguretat."}
-              </p>
+              <LastBackupNote at={lastBackupAt} />
               <p className="mt-2">
                 Importar sempre fusiona: mai esborra res que ja tinguis. Si una entrada importada
                 estava activa en un altre dispositiu, es marca com a feta.
@@ -237,7 +256,7 @@ export function Settings() {
           <List>
             <ListItem
               leading={
-                <IconTile>
+                <IconTile muted>
                   <StorageIcon {...TILE_ICON} />
                 </IconTile>
               }
@@ -249,55 +268,42 @@ export function Settings() {
           </List>
         </Section>
 
-        <Section
-          header="Instal·lació"
-          footer={
-            !isStandalone && !installEvent ? (
-              isIos ? (
-                <p className="text-pretty">
-                  Al Safari, toca Comparteix i després «Afegeix a la pantalla d&apos;inici».
-                </p>
+        <Section header="Instal·lació">
+          {showInstallRow ? (
+            <List>
+              {isStandalone ? (
+                <ListItem
+                  leading={
+                    <IconTile muted>
+                      <InstallIcon {...TILE_ICON} />
+                    </IconTile>
+                  }
+                  title="App instal·lada"
+                  trailing={<CheckIcon size={20} strokeWidth={2.4} className="block text-label" />}
+                />
               ) : (
-                <p className="text-pretty">
-                  Fes servir el menú del navegador per instal·lar l&apos;app (pot trigar uns segons
-                  a aparèixer després d&apos;obrir la pàgina).
-                </p>
-              )
-            ) : undefined
-          }
-        >
-          <List>
-            {installEvent && !isStandalone ? (
-              <ListItem
-                onClick={onInstallClick}
-                leading={
-                  <IconTile>
-                    <InstallIcon {...TILE_ICON} />
-                  </IconTile>
-                }
-                title="Instal·la MY GYM"
-              />
-            ) : (
-              <ListItem
-                leading={
-                  <IconTile>
-                    <InstallIcon {...TILE_ICON} />
-                  </IconTile>
-                }
-                title="App instal·lada"
-                trailing={
-                  isStandalone ? (
-                    <CheckIcon size={20} strokeWidth={2.4} className="block text-label" />
-                  ) : (
-                    "No"
-                  )
-                }
-              />
-            )}
-          </List>
+                <ListItem
+                  onClick={onInstallClick}
+                  leading={
+                    <IconTile>
+                      <InstallIcon {...TILE_ICON} />
+                    </IconTile>
+                  }
+                  title="Instal·la MY GYM"
+                />
+              )}
+            </List>
+          ) : (
+            // Sense botó d'instal·lar ni app instal·lada: només les instruccions, sense una fila morta.
+            <p className="px-4 text-footnote text-pretty text-label-2">
+              {isIos
+                ? "Al Safari, toca Comparteix i després «Afegeix a la pantalla d'inici»."
+                : "Fes servir el menú del navegador per instal·lar l'app (pot trigar uns segons a aparèixer després d'obrir la pàgina)."}
+            </p>
+          )}
         </Section>
 
-        <div className="px-4 text-center text-footnote text-label-3">
+        <div className="px-4 text-center text-footnote text-label-2">
           <p className="font-semibold">MY GYM</p>
           <p>Les dades només es desen en aquest dispositiu.</p>
         </div>

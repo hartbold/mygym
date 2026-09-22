@@ -1,24 +1,85 @@
 "use client";
 
-import { useState } from "react";
-import { addSet, deleteEntry, finishEntry, removeSet, STALE_MS, updateEntry } from "@/lib/actions";
+import { useId, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
+import {
+  deleteEntry,
+  duplicateLastSet,
+  finishEntry,
+  removeSet,
+  STALE_MS,
+  updateEntry,
+  updateSet,
+} from "@/lib/actions";
 import { nowMs } from "@/lib/dates";
 import { formatClock, formatClockTimer, formatDuration, formatWeight } from "@/lib/format";
+import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/set-draft";
 import type { Entry, EntrySet, ExerciseKind } from "@/lib/types";
-import { PlusIcon, TrashIcon, XmarkIcon } from "./icons";
+import { CheckIcon, PlusIcon, TrashIcon, WarningIcon, XmarkIcon } from "./icons";
 import { Button, CARD, FIELD, IconButton } from "./ui";
 
 /** Xip d'estat de la capçalera (cronòmetre en directe o «Inactiu»). */
 const CHIP =
   "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-subhead font-semibold tabular-nums";
 
+/** Camp numèric compacte per editar una sèrie dins la fila (36px d'alt; l'amplada la posa cada camp). */
+const SET_FIELD =
+  "h-9 min-w-0 rounded-[9px] bg-fill-3 px-1 text-center text-body font-semibold text-label tabular-nums outline-hidden transition-[box-shadow,background-color] duration-150 placeholder:font-normal placeholder:text-label-3 focus:bg-surface focus:ring-[1.5px] focus:ring-accent";
+
 export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
   const [finishing, setFinishing] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(entry.name);
+  // Sèrie en edició. El ref és la veritat per evitar desar dues vegades quan
+  // coincideixen la pèrdua de focus i un toc («Fet», «+ Sèrie», una altra fila).
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
+  const editingSetRef = useRef<string | null>(null);
+  const [setDraft, setSetDraft] = useState<SetDraft>(emptyDraft);
+  const [setError, setSetError] = useState<string | null>(null);
   const isActive = entry.status === "active";
   const stale = isActive && now - entry.updatedAt > STALE_MS;
   const elapsedMs = now - entry.startedAt;
+
+  function startEditingSet(set: Pick<EntrySet, "id" | "weight" | "reps" | "durationSec">) {
+    editingSetRef.current = set.id;
+    setEditingSetId(set.id);
+    setSetDraft(draftFromSet(set));
+    setSetError(null);
+  }
+
+  function stopEditingSet() {
+    editingSetRef.current = null;
+    setEditingSetId(null);
+    setSetError(null);
+  }
+
+  async function commitSet() {
+    const setId = editingSetRef.current;
+    if (!setId) return;
+    const parsed = parseSetDraft(entry.kind, setDraft);
+    if (!parsed.ok || !parsed.value) {
+      // Una sèrie existent no pot quedar buida: per treure-la hi ha la ×.
+      setSetError(
+        parsed.ok
+          ? entry.kind === "reps"
+            ? "Les repeticions han de ser un número enter ≥ 1."
+            : "La durada ha de ser d'almenys 1 segon."
+          : parsed.error,
+      );
+      return;
+    }
+    stopEditingSet();
+    const { weight, reps, durationSec } = parsed.value;
+    const current = entry.sets.find((s) => s.id === setId);
+    if (current?.weight === weight && current?.reps === reps && current?.durationSec === durationSec) return;
+    // Sense cap `await` abans: així l'escriptura queda a la cua abans que un
+    // «+ Sèrie» tocat just després (vegeu `duplicateLastSet`).
+    await updateSet(
+      entry.id,
+      setId,
+      entry.kind === "reps" ? { weight, reps } : { weight, durationSec },
+      nowMs(),
+    );
+  }
 
   async function onFinish() {
     if (finishing) return;
@@ -30,13 +91,13 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
     }
   }
 
+  /** Copia l'última sèrie i l'obre per editar-la: el més habitual és ajustar-ne pes o reps. */
   async function onAddSet() {
-    const last = entry.sets[entry.sets.length - 1];
-    await addSet(
-      entry.id,
-      { weight: last?.weight, reps: last?.reps, durationSec: last?.durationSec },
-      nowMs(),
-    );
+    // Desa primer una edició en curs (si el focus no ha sortit del camp, no s'ha desat).
+    if (editingSetRef.current) void commitSet();
+    if (editingSetRef.current) return; // l'edició no és vàlida: se'n mostra l'error
+    const created = await duplicateLastSet(entry.id, nowMs());
+    if (created) startEditingSet(created);
   }
 
   async function onRemoveSet(setId: string) {
@@ -71,6 +132,8 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
   return (
     <article className={`${CARD} overflow-hidden`}>
       <header className="px-4 pt-3.5 pb-1.5">
+        {/* El botó del nom es diu «Edita el nom»; el títol dona nom a la targeta per als lectors de pantalla. */}
+        <h3 className="sr-only">{entry.name}</h3>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             {editingName ? (
@@ -95,7 +158,9 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
               <button
                 type="button"
                 onClick={() => setEditingName(true)}
-                className="max-w-full rounded-md text-left text-headline text-pretty break-words transition-opacity duration-150 active:opacity-50"
+                // Zona tàctil de 46px sense moure res (el marge negatiu compensa el farciment);
+                // `relative` la posa per sobre de la línia de sota perquè no li prengui els tocs.
+                className="relative -my-3 max-w-full rounded-md py-3 text-left text-headline text-pretty break-words transition-opacity duration-150 active:opacity-50"
                 aria-label="Edita el nom"
               >
                 {entry.name}
@@ -127,21 +192,49 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
         <ol className="list-inset">
           {entry.sets.map((set, i) => (
             <li key={set.id} className="flex items-stretch pl-4">
-              <span className="mr-3 flex shrink-0 items-center">
-                <span className="grid size-6 place-items-center rounded-full bg-fill-3 text-caption font-semibold text-label-2 tabular-nums">
+              {/* En edició, alineat amb els camps (8px + 36/2 − 24/2) i no amb el missatge d'error. */}
+              <span
+                className={`mr-3 flex shrink-0 ${editingSetId === set.id ? "items-start pt-3.5" : "items-center"}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid size-6 place-items-center rounded-full bg-fill-3 text-caption font-semibold text-label-2 tabular-nums"
+                >
                   {i + 1}
                 </span>
               </span>
-              <span className="cell flex min-h-11 min-w-0 flex-1 items-center gap-2">
-                <SetValue set={set} kind={entry.kind} />
-                <IconButton
-                  variant="ghost"
-                  label="Esborra la sèrie"
-                  onClick={() => onRemoveSet(set.id)}
-                >
-                  <XmarkIcon size={16} strokeWidth={2.2} />
-                </IconButton>
-              </span>
+              {editingSetId === set.id ? (
+                <SetEditor
+                  kind={entry.kind}
+                  index={i + 1}
+                  draft={setDraft}
+                  error={setError}
+                  onChange={(patch) => {
+                    setSetDraft((d) => ({ ...d, ...patch }));
+                    setSetError(null);
+                  }}
+                  onCommit={() => void commitSet()}
+                  onCancel={stopEditingSet}
+                />
+              ) : (
+                <span className="cell flex min-h-11 min-w-0 flex-1 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startEditingSet(set)}
+                    className="flex min-h-11 min-w-0 flex-1 items-center text-left transition-opacity duration-150 focus-visible:-outline-offset-2 active:opacity-50"
+                  >
+                    <span className="sr-only">Edita la sèrie {i + 1}: </span>
+                    <SetValue set={set} kind={entry.kind} />
+                  </button>
+                  <IconButton
+                    variant="ghost"
+                    label="Esborra la sèrie"
+                    onClick={() => onRemoveSet(set.id)}
+                  >
+                    <XmarkIcon size={16} strokeWidth={2.2} />
+                  </IconButton>
+                </span>
+              )}
             </li>
           ))}
         </ol>
@@ -167,7 +260,131 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
   );
 }
 
-/** «60,5 kg × 10 reps», «10 reps» o «1:00 · 10 kg»: xifra en negreta, detall en gris. */
+/**
+ * Edició d'una sèrie dins la mateixa fila, amb el mateix ordre que es llegeix:
+ * «[60,5] kg × [10] reps» o «[15] : [00] · [—] kg». Desa amb «Fet», Enter o
+ * en sortir de la fila; Escape descarta.
+ */
+function SetEditor({
+  kind,
+  index,
+  draft,
+  error,
+  onChange,
+  onCommit,
+  onCancel,
+}: {
+  kind: ExerciseKind;
+  index: number;
+  draft: SetDraft;
+  error: string | null;
+  onChange: (patch: Partial<SetDraft>) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const errorId = useId();
+
+  function onBlur(e: FocusEvent<HTMLDivElement>) {
+    // Moure's entre els camps de la mateixa sèrie no desa; sortir-ne, sí.
+    if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+    onCommit();
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onCommit();
+    }
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onCancel();
+    }
+  }
+
+  const field = (
+    key: keyof SetDraft,
+    label: string,
+    width: string,
+    opts: { inputMode: "decimal" | "numeric"; placeholder?: string; autoFocus?: boolean },
+  ) => (
+    <input
+      autoFocus={opts.autoFocus}
+      inputMode={opts.inputMode}
+      placeholder={opts.placeholder}
+      value={draft[key]}
+      onChange={(e) => onChange({ [key]: e.target.value })}
+      onFocus={(e) => e.currentTarget.select()}
+      aria-label={`${label}, sèrie ${index}`}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error ? errorId : undefined}
+      autoComplete="off"
+      enterKeyHint="done"
+      className={`${SET_FIELD} ${width}`}
+    />
+  );
+  const unit = (text: string) => (
+    <span aria-hidden="true" className="text-subhead text-label-2">
+      {text}
+    </span>
+  );
+
+  return (
+    <div className="cell min-w-0 flex-1 py-2 pr-1" onBlur={onBlur} onKeyDown={onKeyDown}>
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-2">
+          {kind === "reps" ? (
+            <>
+              <span className="flex items-center gap-1.5">
+                {field("weight", "Pes en kg", "w-16", { inputMode: "decimal", placeholder: "—", autoFocus: true })}
+                {unit("kg")}
+              </span>
+              <span aria-hidden="true" className="text-subhead text-label-3">
+                ×
+              </span>
+              <span className="flex items-center gap-1.5">
+                {field("reps", "Repeticions", "w-12", { inputMode: "numeric" })}
+                {unit("reps")}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1">
+                {field("min", "Minuts", "w-12", { inputMode: "numeric", placeholder: "0", autoFocus: true })}
+                <span aria-hidden="true" className="font-semibold text-label-3">
+                  :
+                </span>
+                {field("sec", "Segons", "w-12", { inputMode: "numeric", placeholder: "00" })}
+              </span>
+              <span aria-hidden="true" className="text-subhead text-label-3">
+                ·
+              </span>
+              <span className="flex items-center gap-1.5">
+                {field("weight", "Pes en kg", "w-16", { inputMode: "decimal", placeholder: "—" })}
+                {unit("kg")}
+              </span>
+            </>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onCommit}
+          aria-label="Fet"
+          className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-on-accent transition-transform duration-150 ease-ios active:scale-[0.94]"
+        >
+          <CheckIcon size={18} strokeWidth={2.4} />
+        </button>
+      </div>
+      {error && (
+        <p id={errorId} role="alert" className="mt-1.5 flex items-start gap-1.5 text-footnote text-danger-ink">
+          <WarningIcon size={15} strokeWidth={2} className="mt-px shrink-0" />
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** «60,5 kg × 10 reps», «10 reps» o «1:00 · 10 kg»: xifres en negreta, «reps» i detall en gris. */
 function SetValue({ set, kind }: { set: EntrySet; kind: ExerciseKind }) {
   if (kind === "time") {
     return (
@@ -181,15 +398,20 @@ function SetValue({ set, kind }: { set: EntrySet; kind: ExerciseKind }) {
       </span>
     );
   }
+  const reps = (
+    <>
+      <span className="font-semibold">{set.reps ?? "—"}</span>
+      <span className="text-label-2"> reps</span>
+    </>
+  );
   if (set.weight === undefined) {
-    return (
-      <span className="min-w-0 flex-1 text-body font-semibold tabular-nums">{set.reps ?? "—"} reps</span>
-    );
+    return <span className="min-w-0 flex-1 text-body tabular-nums">{reps}</span>;
   }
   return (
-    <span className="min-w-0 flex-1 text-body">
-      <span className="font-semibold tabular-nums">{formatWeight(set.weight)}</span>
-      <span className="text-label-2 tabular-nums"> × {set.reps ?? "—"} reps</span>
+    <span className="min-w-0 flex-1 text-body tabular-nums">
+      <span className="font-semibold">{formatWeight(set.weight)}</span>
+      <span className="text-label-3"> × </span>
+      {reps}
     </span>
   );
 }

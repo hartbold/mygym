@@ -23,6 +23,15 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+const monthFormatter = new Intl.DateTimeFormat("ca-ES", { month: "long" });
+
+/** "Setembre" a partir d'una clau 'YYYY-MM-DD' (per als mesos de l'any en curs). */
+function formatMonth(dateKey: string): string {
+  const [y, m] = dateKey.split("-").map(Number);
+  const label = monthFormatter.format(new Date(y, m - 1, 1));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 /**
  * "3 exercicis · 9 sèries · 2.700 kg · 37min" (el volum i el temps només si
  * n'hi ha). Cada tros és indivisible: si no hi cap, salta de línia sencer i
@@ -135,21 +144,30 @@ export function SessionView({
           </div>
         ) : (
           loaded && (
-            <EmptyState icon={<CalendarIcon size={44} strokeWidth={1.6} />} title="Dia sense exercicis">
-              No hi ha cap exercici aquest dia.
-            </EmptyState>
+            <EmptyState
+              icon={<CalendarIcon size={44} strokeWidth={1.6} />}
+              title="Cap exercici aquest dia"
+            />
           )
         )}
       </Page>
     );
   }
 
-  const months: { label: string; sessions: Session[] }[] = [];
+  // S'agrupa per mes i any (dos setembres d'anys diferents no es barregen),
+  // però a la capçalera l'any només hi surt si no és l'actual.
+  const thisYear = todayKey.slice(0, 4);
+  const months: { key: string; label: string; sessions: Session[] }[] = [];
   for (const s of sessions) {
-    const label = formatMonthYear(s.date);
+    const key = formatMonthYear(s.date);
     const last = months[months.length - 1];
-    if (last && last.label === label) last.sessions.push(s);
-    else months.push({ label, sessions: [s] });
+    if (last && last.key === key) last.sessions.push(s);
+    else
+      months.push({
+        key,
+        label: s.date.slice(0, 4) === thisYear ? formatMonth(s.date) : key,
+        sessions: [s],
+      });
   }
 
   return (
@@ -167,7 +185,7 @@ export function SessionView({
       ) : (
         <div className="space-y-8">
           {months.map((m) => (
-            <Section key={m.label} header={m.label}>
+            <Section key={m.key} header={m.label}>
               <List>
                 {m.sessions.map((s) => (
                   <ListItem

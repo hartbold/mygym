@@ -67,15 +67,20 @@ export function durationParts(ms: number): { value: string; unit: string } {
   return { value: String(totalSeconds % 60), unit: "s" };
 }
 
-/** "1h 23min", "45min", "0:32" (per a durades curtes en segons). */
+const NBSP = " ";
+
+/**
+ * "1 h 05 min", "45 min", "32 s": espai (no separable) entre xifra i unitat,
+ * com a `formatWeight` i a les xifres de `StatGrid`.
+ */
 export function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.round(ms / 1000));
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`;
-  if (m > 0) return `${m}min`;
-  return `${s}s`;
+  if (h > 0) return `${h}${NBSP}h ${String(m).padStart(2, "0")}${NBSP}min`;
+  if (m > 0) return `${m}${NBSP}min`;
+  return `${s}${NBSP}s`;
 }
 
 /** "1:05" a partir de segons, per al cronòmetre en directe. */

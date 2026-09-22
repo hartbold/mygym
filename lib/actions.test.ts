@@ -3,6 +3,7 @@ import {
   addSet,
   closeStaleActive,
   deleteEntry,
+  duplicateLastSet,
   finishEntry,
   removeSet,
   STALE_MS,
@@ -156,6 +157,50 @@ describe("addSet / updateSet / removeSet", () => {
     const id = await startEntry({ name: "Press banca", kind: "reps", sets: [] }, 0);
     await deleteEntry(id);
     await expect(addSet(id, { weight: 10, reps: 1 }, 100)).resolves.not.toThrow();
+    await expect(duplicateLastSet(id, 100)).resolves.toBeUndefined();
+  });
+
+  it("updateSet can clear the weight (bodyweight) and change a timed set's duration", async () => {
+    const id = await startEntry({ name: "Cinta de córrer", kind: "time", sets: [{ durationSec: 1200, weight: 5 }] }, 0);
+    const setId = (await db.entries.get(id))!.sets[0].id;
+    await updateSet(id, setId, { weight: undefined, durationSec: 900 }, 1000);
+    const after = await db.entries.get(id);
+    expect(after?.sets[0].durationSec).toBe(900);
+    expect(after?.sets[0].weight).toBeUndefined();
+    expect(after?.updatedAt).toBe(1000);
+  });
+});
+
+describe("duplicateLastSet", () => {
+  it("appends a copy of the last set with a new id and returns it", async () => {
+    const id = await startEntry(
+      { name: "Press banca", kind: "reps", sets: [{ weight: 60, reps: 10 }, { weight: 65, reps: 8 }] },
+      0,
+    );
+    const created = await duplicateLastSet(id, 500);
+    const entry = await db.entries.get(id);
+    expect(entry?.sets).toHaveLength(3);
+    expect(entry?.sets[2]).toEqual(created);
+    expect(created).toMatchObject({ weight: 65, reps: 8, doneAt: 500 });
+    expect(created?.id).not.toBe(entry?.sets[1].id);
+    expect(entry?.updatedAt).toBe(500);
+  });
+
+  it("adds an empty set when there are none yet", async () => {
+    const id = await startEntry({ name: "Press banca", kind: "reps", sets: [] }, 0);
+    const created = await duplicateLastSet(id, 500);
+    expect(created).toMatchObject({ weight: undefined, reps: undefined, durationSec: undefined });
+    expect((await db.entries.get(id))?.sets).toHaveLength(1);
+  });
+
+  it("copies the values of an edit that was issued just before it (not stale UI state)", async () => {
+    const id = await startEntry({ name: "Press banca", kind: "reps", sets: [{ weight: 60, reps: 10 }] }, 0);
+    const setId = (await db.entries.get(id))!.sets[0].id;
+    // La targeta llança l'edició (en perdre el focus) i «+ Sèrie» sense esperar-se.
+    const edit = updateSet(id, setId, { weight: 62.5, reps: 7 }, 900);
+    const dup = duplicateLastSet(id, 1000);
+    await Promise.all([edit, dup]);
+    expect(await dup).toMatchObject({ weight: 62.5, reps: 7 });
   });
 });
 

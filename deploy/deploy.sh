@@ -21,7 +21,8 @@ echo "1/3 Pujant l'aplicació (sw.js encara no)…"
 rsync -az --chmod=D755,F644 --no-owner --no-group --exclude=/sw.js out/ "$HOST/"
 
 echo "2/3 Comprovant el desplegament…"
-node scripts/smoke.mjs "$URL"
+# C:\Program Files\nodejs
+/mnt/c/Program\ Files/nodejs/node.exe scripts/smoke.mjs "$URL"
 
 echo "3/3 Publicant sw.js i netejant fitxers orfes…"
 rsync -az --chmod=F644 --no-owner --no-group out/sw.js "$HOST/sw.js"

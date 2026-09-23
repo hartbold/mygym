@@ -42,3 +42,13 @@ describe("progrés i exercici", () => {
     expect(parseHash("#exercici?n=Planxa&k=x")).toEqual({ view: "progres" });
   });
 });
+
+describe("plantilla", () => {
+  it("fa l'anada i tornada de l'editor i sense id torna a Ajustos", () => {
+    expect(parseHash(buildHash({ view: "plantilla", templateId: "abc-123" }))).toEqual({
+      view: "plantilla",
+      templateId: "abc-123",
+    });
+    expect(parseHash("#plantilla")).toEqual({ view: "ajustos" });
+  });
+});

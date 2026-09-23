@@ -226,3 +226,87 @@ export function Meter({ value, marker }: { value: number; marker?: number }) {
     </span>
   );
 }
+
+/** Fons de cada nivell d'intensitat (classes estàtiques perquè Tailwind les generi). */
+const LEVEL_BG: Record<1 | 2 | 3 | 4, string> = {
+  1: "bg-accent/25 text-label",
+  2: "bg-accent/45 text-label",
+  3: "bg-accent/70 text-on-accent",
+  4: "bg-accent text-on-accent",
+};
+
+const CAL_WEEKDAYS = ["dl", "dt", "dc", "dj", "dv", "ds", "dg"];
+
+/**
+ * Calendari mensual amb els dies entrenats acolorits segons la càrrega (com
+ * la quadrícula de GitHub). Tocar un dia entrenat n'obre la sessió.
+ */
+export function MonthCalendar({
+  weeks,
+  today,
+  levelOf,
+  describe,
+  onOpenDay,
+}: {
+  weeks: (string | null)[][];
+  today: string;
+  /** Nivell 1–4 d'un dia entrenat; undefined si no s'hi va entrenar. */
+  levelOf: (date: string) => 1 | 2 | 3 | 4 | undefined;
+  /** Text per als lectors de pantalla d'un dia entrenat. */
+  describe: (date: string) => string;
+  onOpenDay: (date: string) => void;
+}) {
+  return (
+    <div role="grid" className="grid grid-cols-7 gap-1.5">
+      {CAL_WEEKDAYS.map((d) => (
+        <span key={d} role="columnheader" className="pb-1 text-center text-caption2 font-semibold text-label-2 uppercase">
+          {d}
+        </span>
+      ))}
+      {weeks.flat().map((date, i) => {
+        if (!date) return <span key={`empty-${i}`} aria-hidden="true" />;
+        const day = Number(date.slice(8));
+        const level = levelOf(date);
+        const isToday = date === today;
+        const ring = isToday ? "ring-[1.5px] ring-label ring-offset-1 ring-offset-surface" : "";
+        if (!level) {
+          return (
+            <span
+              key={date}
+              className={`grid aspect-square place-items-center rounded-lg text-subhead tabular-nums ${
+                date > today ? "text-label-4" : "bg-fill-4 text-label-2"
+              } ${ring}`}
+            >
+              {day}
+            </span>
+          );
+        }
+        return (
+          <button
+            key={date}
+            type="button"
+            onClick={() => onOpenDay(date)}
+            aria-label={describe(date)}
+            className={`grid aspect-square place-items-center rounded-lg text-subhead font-semibold tabular-nums transition-transform duration-150 ease-ios active:scale-[0.92] ${LEVEL_BG[level]} ${ring}`}
+          >
+            {day}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Llegenda «Menys ▢▢▢▢ Més» dels nivells del calendari. */
+export function IntensityLegend() {
+  return (
+    <div aria-hidden="true" className="flex items-center justify-end gap-1.5 text-caption text-label-2">
+      Menys
+      <span className="size-3 rounded-[3px] bg-fill-4" />
+      {([1, 2, 3, 4] as const).map((l) => (
+        <span key={l} className={`size-3 rounded-[3px] ${LEVEL_BG[l].split(" ")[0]}`} />
+      ))}
+      Més
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import type { ExerciseKind } from "./types";
 
-export type View = "avui" | "historial" | "sessio" | "progres" | "exercici" | "ajustos";
+export type View = "avui" | "historial" | "sessio" | "progres" | "exercici" | "ajustos" | "plantilla";
 
 export interface Route {
   view: View;
@@ -8,9 +8,11 @@ export interface Route {
   date?: string;
   /** Només per a `view: 'exercici'`. */
   exercise?: { name: string; kind: ExerciseKind };
+  /** Només per a `view: "plantilla"`. */
+  templateId?: string;
 }
 
-const VALID_VIEWS: View[] = ["avui", "historial", "sessio", "progres", "exercici", "ajustos"];
+const VALID_VIEWS: View[] = ["avui", "historial", "sessio", "progres", "exercici", "ajustos", "plantilla"];
 
 /**
  * Tota la navegació interna viu al fragment `#` — mai `useSearchParams` ni
@@ -31,6 +33,10 @@ export function parseHash(hash: string): Route {
     if (!name || (kind !== "reps" && kind !== "time")) return { view: "progres" };
     return { view, exercise: { name, kind } };
   }
+  if (view === "plantilla") {
+    const id = params.get("id");
+    return id ? { view, templateId: id } : { view: "ajustos" };
+  }
   return { view };
 }
 
@@ -39,6 +45,9 @@ export function buildHash(route: Route): string {
   if (route.view === "exercici" && route.exercise) {
     const params = new URLSearchParams({ n: route.exercise.name, k: route.exercise.kind });
     return `#exercici?${params}`;
+  }
+  if (route.view === "plantilla" && route.templateId) {
+    return `#plantilla?${new URLSearchParams({ id: route.templateId })}`;
   }
   if (route.view === "avui") return "#";
   return `#${route.view}`;

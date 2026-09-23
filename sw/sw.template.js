@@ -63,3 +63,10 @@ self.addEventListener("fetch", (event) => {
     })(),
   );
 });
+
+// L'app demana d'activar la versió nova quan l'usuari prem «Actualitza»
+// (vegeu components/SwRegister.tsx); mai d'amagat, per no recarregar a mig
+// entrenament.
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") self.skipWaiting();
+});

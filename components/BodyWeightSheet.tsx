@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { deleteBodyWeight, isPlausibleBodyWeight, logBodyWeight } from "@/lib/body";
 import { isValidDateKey, localDateKey, nowMs, parseDecimal } from "@/lib/dates";
 import type { BodyWeight } from "@/lib/types";
+import { confirmAction } from "./ConfirmHost";
 import { WarningIcon, XmarkIcon } from "./icons";
 import { Button, CARD, IconButton, useSheetViewport } from "./ui";
 
@@ -79,7 +80,9 @@ export function BodyWeightSheet({
   }
 
   async function onDelete() {
-    if (!editing || !confirm("Esborrar aquest registre de pes?")) return;
+    if (!editing) return;
+    const ok = await confirmAction({ title: "Esborrar aquest registre de pes?", confirmLabel: "Esborra", destructive: true });
+    if (!ok) return;
     await deleteBodyWeight(editing.id);
     requestClose();
   }

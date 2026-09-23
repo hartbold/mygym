@@ -102,7 +102,7 @@ describe("importBackup (merge-only)", () => {
   it("coerces an imported active entry to done, preserving the at-most-one-active invariant", async () => {
     const activeRaw: Entry = {
       id: "was-active",
-      name: "Esquats",
+      name: "Esquat",
       kind: "reps",
       date: "2026-09-21",
       startedAt: 1000,
@@ -151,5 +151,26 @@ describe("format v2: pes corporal i perfil", () => {
   it("rebutja un pes no vàlid", () => {
     const bad = buildBackup([], 0, { bodyWeights: [{ id: "w", date: "2026-02-30", kg: 80, updatedAt: 1 }] });
     expect(validateBackup(bad).ok).toBe(false);
+  });
+});
+
+describe("plantilles al backup", () => {
+  it("fa l'anada i tornada i fusiona per updatedAt", async () => {
+    await db.templates.clear();
+    const t = {
+      id: "t1",
+      name: "Empenta",
+      exercises: [{ id: "x", name: "Press banca", kind: "reps" as const, sets: [{ weight: 60, reps: 8 }] }],
+      createdAt: 1,
+      updatedAt: 10,
+    };
+    const parsed = parseBackupFile(JSON.stringify(buildBackup([], 0, { templates: [t] })));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    await importBackup(parsed.value);
+    // Nom antic normalitzat en importar.
+    expect((await db.templates.get("t1"))?.exercises[0].name).toBe("Pressió sobre banc");
+    await importBackup(buildBackup([], 0, { templates: [{ ...t, name: "Vella", updatedAt: 5 }] }));
+    expect((await db.templates.get("t1"))?.name).toBe("Empenta");
   });
 });

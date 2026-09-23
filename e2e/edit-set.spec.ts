@@ -16,12 +16,12 @@ test("les sèries de la targeta es poden editar: «+ Sèrie» obre la nova en ed
   page,
 }) => {
   await page.goto("/");
-  await createEntry(page, "Press de banca", async (p) => {
+  await createEntry(page, "Pressió sobre banc", async (p) => {
     await p.getByPlaceholder("kg").nth(0).fill("60");
     await p.getByPlaceholder("reps").nth(0).fill("10");
   });
 
-  const card = page.locator("article", { hasText: "Press de banca" });
+  const card = page.locator("article", { hasText: "Pressió sobre banc" });
   const set = (n: number) => card.getByRole("button", { name: new RegExp(`^Edita la sèrie ${n}:`) });
 
   // «+ Sèrie» copia l'última i la deixa en edició per ajustar pes i reps.
@@ -84,8 +84,10 @@ test("el selector es pot cercar en anglès i castellà, però només mostra noms
   for (const [query, catalan] of [
     ["deadlift", "Pes mort"],
     ["peso muerto", "Pes mort"],
-    ["plancha", "Planxa"],
-    ["bench press", "Press de banca"],
+    ["plancha", "Planxa amb quatre suports"],
+    ["bench press", "Pressió sobre banc"],
+    ["lat pulldown", "Tracció a la politja alta"],
+    ["jalon al pecho", "Tracció a la politja alta"],
   ]) {
     await search.fill(query);
     await expect(dialog.getByRole("button", { name: catalan, exact: true })).toBeVisible();
@@ -93,9 +95,14 @@ test("el selector es pot cercar en anglès i castellà, però només mostra noms
     // Un àlies conegut sencer no proposa crear un exercici nou.
     await expect(dialog.getByRole("button", { name: "Crea i continua" })).toHaveCount(0);
   }
-  // Una part d'un àlies també troba l'exercici.
+  // Una part d'un àlies també troba l'exercici, i es pot cercar per màquina i grup muscular.
   await search.fill("bench");
-  await expect(dialog.getByRole("button", { name: "Press de banca", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Pressió sobre banc", exact: true })).toBeVisible();
+  await search.fill("maquina pecho");
+  await expect(dialog.getByRole("button", { name: "Papallona", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Pressió de pit", exact: true })).toBeVisible();
+  await search.fill("curl leg");
+  await expect(dialog.getByRole("button", { name: "Rull de cames", exact: true })).toBeVisible();
 });
 
 test("la durada d'un exercici de temps es pot corregir un cop fet", async ({ page }) => {

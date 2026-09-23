@@ -3,12 +3,16 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isPlausibleHeight, setHeight } from "@/lib/body";
+import { buildTemplatesFile, importTemplates, parseTemplatesFile, templatesFileName } from "@/lib/template-io";
+import { SAMPLE_TEMPLATES } from "@/lib/template-samples";
+import { createTemplate } from "@/lib/templates";
 import { backupFileName, buildBackup, importBackup, parseBackupFile } from "@/lib/backup";
 import { db } from "@/lib/db";
 import { localDateKey, nowMs, parseDecimal } from "@/lib/dates";
 import { formatDayMonth } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
-import { CheckIcon, ExportIcon, ImportIcon, InstallIcon, RulerIcon, StorageIcon, WarningIcon } from "./icons";
+import { CheckIcon, ExportIcon, ImportIcon, InstallIcon, PlusIcon, RulerIcon, StorageIcon, WarningIcon } from "./icons";
+import { templateSummary } from "./TemplateSheet";
 import { List, ListItem, NavHeader, Page, Section } from "./ui";
 
 const LAST_BACKUP_KEY = "mygym:lastBackupAt";
@@ -81,7 +85,7 @@ function LastBackupNote({ at }: { at: number | null }) {
 
 const TILE_ICON = { size: 18, strokeWidth: 2 } as const;
 
-export function Settings() {
+export function Settings({ onOpenTemplate }: { onOpenTemplate: (id: string) => void }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [persisted, setPersisted] = useState<boolean | null>(null);
   const [lastBackupAt, setLastBackupAt] = useState<number | null>(() => {
@@ -123,6 +127,7 @@ export function Settings() {
     const envelope = buildBackup(entries, now, {
       bodyWeights: await db.bodyWeights.toArray(),
       profile: await db.profile.get("me"),
+      templates: await db.templates.toArray(),
     });
     const fileName = backupFileName(now);
     const file = new File([JSON.stringify(envelope, null, 2)], fileName, {
@@ -177,6 +182,8 @@ export function Settings() {
 
       <div className="space-y-8">
         <ProfileSection />
+
+        <TemplatesSection onOpenTemplate={onOpenTemplate} />
 
         <Section
           header="Còpia de seguretat"
@@ -409,5 +416,166 @@ function ProfileSection() {
         />
       </List>
     </Section>
+  );
+}
+
+/** Descarrega (o comparteix, al mòbil) un fitxer JSON. Torna false si l'usuari ho cancel·la. */
+async function shareOrDownload(fileName: string, data: unknown): Promise<boolean> {
+  const file = new File([JSON.stringify(data, null, 2)], fileName, { type: "application/json" });
+  try {
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    }
+    return true;
+  } catch (err) {
+    if ((err as DOMException)?.name === "AbortError") return false;
+    throw err;
+  }
+}
+
+/**
+ * Plantilles d'entrenament: crear-ne, obrir-ne l'editor, importar-ne o
+ * exportar-ne en JSON i, si no n'hi ha cap, afegir-ne de mostra.
+ */
+function TemplatesSection({ onOpenTemplate }: { onOpenTemplate: (id: string) => void }) {
+  const templates = useLiveQuery(() => db.templates.toArray(), []);
+  const [status, setStatus] = useState<Status | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const sorted = [...(templates ?? [])].sort((a, b) => a.name.localeCompare(b.name, "ca"));
+  // Les mostres sempre hi són; només s'amaguen les que ja tens (pel nom).
+  const samples = SAMPLE_TEMPLATES.filter((sample) => !sorted.some((t) => t.name === sample.name));
+
+  async function onNew() {
+    const id = await createTemplate({ name: "Nova plantilla", exercises: [] }, nowMs());
+    onOpenTemplate(id);
+  }
+
+  async function onImport(file: File) {
+    const parsed = parseTemplatesFile(await file.text());
+    if (!parsed.ok) {
+      setStatus({ tone: "error", text: parsed.error });
+      return;
+    }
+    const n = await importTemplates(parsed.value, nowMs());
+    setStatus({ tone: "ok", text: n === 1 ? "S'ha importat 1 plantilla." : `S'han importat ${n} plantilles.` });
+  }
+
+  async function onExport() {
+    const now = nowMs();
+    try {
+      if (await shareOrDownload(templatesFileName(now), buildTemplatesFile(sorted))) {
+        setStatus({ tone: "ok", text: `Desat com a ${templatesFileName(now)}` });
+      }
+    } catch {
+      setStatus({ tone: "error", text: "No s'han pogut exportar les plantilles." });
+    }
+  }
+
+  return (
+    <>
+      <Section
+        header="Plantilles d'entrenament"
+        footer={
+          status ? (
+            <span className={`flex items-start gap-1.5 ${status.tone === "error" ? "text-danger-ink" : ""}`} role="status">
+              {status.tone === "error" ? (
+                <WarningIcon size={15} strokeWidth={2} className="mt-px shrink-0" />
+              ) : (
+                <CheckIcon size={15} strokeWidth={2.2} className="mt-px shrink-0" />
+              )}
+              {status.text}
+            </span>
+          ) : (
+            "Rutines amb exercicis, sèries i pesos per carregar-les a Avui i anar marcant cada sèrie. El fitxer JSON serveix per compartir-les."
+          )
+        }
+      >
+        <div className="space-y-3">
+          {sorted.length > 0 && (
+            <List>
+              {sorted.map((t) => (
+                <ListItem
+                  key={t.id}
+                  title={t.name}
+                  titleClassName="font-medium"
+                  subtitle={templateSummary(t)}
+                  chevron
+                  onClick={() => onOpenTemplate(t.id)}
+                />
+              ))}
+            </List>
+          )}
+          <List>
+            <ListItem
+              leading={
+                <IconTile>
+                  <PlusIcon size={18} strokeWidth={2.2} />
+                </IconTile>
+              }
+              title="Nova plantilla"
+              onClick={() => void onNew()}
+            />
+            <ListItem
+              leading={
+                <IconTile>
+                  <ImportIcon size={18} />
+                </IconTile>
+              }
+              title="Importa plantilles"
+              onClick={() => fileRef.current?.click()}
+            />
+            {sorted.length > 0 && (
+              <ListItem
+                leading={
+                  <IconTile>
+                    <ExportIcon size={18} />
+                  </IconTile>
+                }
+                title="Exporta plantilles"
+                onClick={() => void onExport()}
+              />
+            )}
+          </List>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            aria-label="Fitxer de plantilles"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void onImport(file);
+            }}
+          />
+        </div>
+      </Section>
+      {templates && samples.length > 0 && (
+        <Section
+          header="Plantilles de mostra"
+          footer="Rutines per començar. Els pesos són orientatius: ajusta'ls a l'editor."
+        >
+          <List>
+            {samples.map((sample) => (
+              <ListItem
+                key={sample.name}
+                title={sample.name}
+                subtitle={templateSummary(sample)}
+                trailing={<span className="font-semibold text-label">Afegeix</span>}
+                ariaLabel={`Afegeix la plantilla de mostra ${sample.name}`}
+                onClick={() => void createTemplate(sample, nowMs())}
+              />
+            ))}
+          </List>
+        </Section>
+      )}
+    </>
   );
 }

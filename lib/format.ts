@@ -96,3 +96,8 @@ export function formatShortDate(dateKey: string): string {
   const [, m, d] = dateKey.split("-").map(Number);
   return `${d}/${m}`;
 }
+
+/** «de» amb apostrofació: «d'Esquat», «d'Hip…», però «de Pes mort». */
+export function deName(name: string): string {
+  return /^[aeiouàèéíòóúh]/i.test(name) ? `d'${name}` : `de ${name}`;
+}

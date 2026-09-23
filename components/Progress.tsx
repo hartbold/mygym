@@ -8,7 +8,9 @@ import { localDateKey } from "@/lib/dates";
 import {
   formatClockTimer,
   formatDayMonth,
+  formatDayLabel,
   formatDuration,
+  formatMonthYear,
   formatNumber,
   formatShortDate,
   formatWeekdayShort,
@@ -18,9 +20,13 @@ import {
   consistency,
   durationByWeekday,
   exerciseSummaries,
+  intensityLevel,
+  monthGrid,
   muscleVolume,
   plateaus,
   recentRecords,
+  shiftMonth,
+  trainingDays,
   weightDrops,
   type ExerciseId,
   type PersonalRecord,
@@ -28,9 +34,9 @@ import {
 } from "@/lib/stats";
 import type { BodyWeight, Entry } from "@/lib/types";
 import { BodyWeightSheet } from "./BodyWeightSheet";
-import { ColumnChart, Heatmap, LineChart, Meter, Sparkline } from "./charts";
-import { ChartIcon, PlateauIcon, PlusIcon, ScaleIcon, TrendDownIcon, TrophyIcon, type IconProps } from "./icons";
-import { Button, CARD, EmptyState, List, ListItem, NavHeader, Page, Section, StatGrid } from "./ui";
+import { ColumnChart, Heatmap, IntensityLegend, LineChart, Meter, MonthCalendar, Sparkline } from "./charts";
+import { ChartIcon, ChevronLeftIcon, ChevronRightIcon, PlateauIcon, PlusIcon, ScaleIcon, TrendDownIcon, TrophyIcon, type IconProps } from "./icons";
+import { Button, CARD, EmptyState, IconButton, List, ListItem, NavHeader, Page, Section, StatGrid } from "./ui";
 
 const WEEKDAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres", "Dissabte", "Diumenge"];
 const WEEKDAYS_SHORT = ["Dl", "Dt", "Dc", "Dj", "Dv", "Ds", "Dg"];
@@ -70,11 +76,13 @@ export function Progress({
   now,
   loaded,
   onOpenExercise,
+  onOpenDay,
 }: {
   entries: Entry[];
   now: number;
   loaded: boolean;
   onOpenExercise: (id: ExerciseId) => void;
+  onOpenDay: (date: string) => void;
 }) {
   const weights = useLiveQuery(() => db.bodyWeights.orderBy("date").toArray(), []) ?? [];
   const profile = useLiveQuery(() => db.profile.get("me"), []);
@@ -95,7 +103,10 @@ export function Progress({
           </EmptyState>
         )}
         {enoughData && now > 0 && (
-          <TrainingStats entries={entries} now={now} today={today} onOpenExercise={onOpenExercise} />
+          <>
+            <TrainingCalendar entries={entries} today={today} onOpenDay={onOpenDay} />
+            <TrainingStats entries={entries} now={now} today={today} onOpenExercise={onOpenExercise} />
+          </>
         )}
         {now > 0 && (
           <BodySection
@@ -114,6 +125,86 @@ export function Progress({
         onClose={() => setWeightSheet({ open: false })}
       />
     </Page>
+  );
+}
+
+/**
+ * Calendari mensual dels dies entrenats, acolorits segons la càrrega del dia
+ * (com la quadrícula de GitHub). Es pot anar enrere fins al primer mes amb
+ * dades; tocar un dia n'obre la sessió.
+ */
+function TrainingCalendar({
+  entries,
+  today,
+  onOpenDay,
+}: {
+  entries: Entry[];
+  today: string;
+  onOpenDay: (date: string) => void;
+}) {
+  const currentMonth = today.slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const days = trainingDays(entries);
+  const all = [...days.values()];
+  const firstMonth = [...days.keys()].sort()[0]?.slice(0, 7) ?? currentMonth;
+  const inMonth = [...days.entries()].filter(([d]) => d.startsWith(month));
+  const sets = inMonth.reduce((n, [, d]) => n + d.sets, 0);
+  const volume = inMonth.reduce((n, [, d]) => n + d.volume, 0);
+
+  const summary =
+    inMonth.length === 0
+      ? "Cap dia entrenat"
+      : [
+          `${inMonth.length} ${inMonth.length === 1 ? "dia" : "dies"}`,
+          `${sets} ${sets === 1 ? "sèrie" : "sèries"}`,
+          volume > 0 ? `${formatNumber(Math.round(volume))} kg` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+  return (
+    <Section header="Calendari">
+      <div className={`${CARD} px-4 pt-3 pb-4`}>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <IconButton
+            label="Mes anterior"
+            disabled={month <= firstMonth}
+            className="disabled:opacity-30"
+            onClick={() => setMonth((m) => shiftMonth(m, -1))}
+          >
+            <ChevronLeftIcon size={18} strokeWidth={2.2} />
+          </IconButton>
+          <p className="text-headline" aria-live="polite">
+            {formatMonthYear(`${month}-01`)}
+          </p>
+          <IconButton
+            label="Mes següent"
+            disabled={month >= currentMonth}
+            className="disabled:opacity-30"
+            onClick={() => setMonth((m) => shiftMonth(m, 1))}
+          >
+            <ChevronRightIcon size={18} strokeWidth={2.2} />
+          </IconButton>
+        </div>
+        <MonthCalendar
+          weeks={monthGrid(month)}
+          today={today}
+          levelOf={(date) => {
+            const d = days.get(date);
+            return d ? intensityLevel(d, all) : undefined;
+          }}
+          describe={(date) => {
+            const d = days.get(date)!;
+            return `${formatDayLabel(date)}: ${d.exercises} ${d.exercises === 1 ? "exercici" : "exercicis"}, ${d.sets} ${d.sets === 1 ? "sèrie" : "sèries"}`;
+          }}
+          onOpenDay={onOpenDay}
+        />
+        <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-footnote tabular-nums text-label-2">{summary}</p>
+          <IntensityLegend />
+        </div>
+      </div>
+    </Section>
   );
 }
 

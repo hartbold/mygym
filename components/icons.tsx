@@ -229,3 +229,30 @@ export function RulerIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function ChevronUpIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m5.5 14.5 6.5-6.5 6.5 6.5" />
+    </Icon>
+  );
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m5.5 9.5 6.5 6.5 6.5-6.5" />
+    </Icon>
+  );
+}
+
+export function ListIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 6.5h11M9 12h11M9 17.5h11" />
+      <circle cx="4.75" cy="6.5" r="1" />
+      <circle cx="4.75" cy="12" r="1" />
+      <circle cx="4.75" cy="17.5" r="1" />
+    </Icon>
+  );
+}

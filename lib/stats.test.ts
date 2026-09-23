@@ -7,6 +7,10 @@ import {
   estimate1RM,
   exerciseProgress,
   exerciseSummaries,
+  intensityLevel,
+  monthGrid,
+  shiftMonth,
+  trainingDays,
   muscleVolume,
   personalRecords,
   plateaus,
@@ -49,7 +53,7 @@ function entry(
 }
 
 const bench = (date: string, ...weights: number[]) =>
-  entry("Press de banca", date, weights.map((weight) => ({ weight, reps: 5 })));
+  entry("Pressió sobre banc", date, weights.map((weight) => ({ weight, reps: 5 })));
 
 describe("dates", () => {
   it("setmanes de dilluns a diumenge, també en canviar d'any i d'hora", () => {
@@ -78,13 +82,13 @@ describe("per exercici", () => {
     // Dues entrades del mateix exercici el mateix dia compten com una sessió.
     bench("2026-09-15", 70),
     bench("2026-09-15", 80),
-    entry("Planxa", "2026-09-15", [{ durationSec: 60 }, { durationSec: 90 }], { kind: "time" }),
+    entry("Planxa amb quatre suports", "2026-09-15", [{ durationSec: 60 }, { durationSec: 90 }], { kind: "time" }),
   ];
 
   it("resumeix màxim, mitjana, 1RM i sessions", () => {
     const [plank, press] = [
-      exerciseSummaries(entries).find((s) => s.name === "Planxa")!,
-      exerciseSummaries(entries).find((s) => s.name === "Press de banca")!,
+      exerciseSummaries(entries).find((s) => s.name === "Planxa amb quatre suports")!,
+      exerciseSummaries(entries).find((s) => s.name === "Pressió sobre banc")!,
     ];
     expect(press).toMatchObject({ sessions: 3, lastDate: "2026-09-15", maxWeight: 80, muscle: "pit" });
     expect(press.avgWeight).toBeCloseTo((60 + 70 + 65 + 75 + 70 + 80) / 6);
@@ -94,7 +98,7 @@ describe("per exercici", () => {
   });
 
   it("progressió: un punt per dia", () => {
-    const points = exerciseProgress(entries, { name: "Press de banca", kind: "reps" });
+    const points = exerciseProgress(entries, { name: "Pressió sobre banc", kind: "reps" });
     expect(points.map((p) => [p.date, p.maxWeight, p.sets])).toEqual([
       ["2026-09-01", 70, 2],
       ["2026-09-08", 75, 2],
@@ -103,7 +107,7 @@ describe("per exercici", () => {
   });
 
   it("rècords: el valor actual i el que va superar", () => {
-    const pes = personalRecords(entries).find((r) => r.name === "Press de banca" && r.type === "pes");
+    const pes = personalRecords(entries).find((r) => r.name === "Pressió sobre banc" && r.type === "pes");
     expect(pes).toMatchObject({ value: 80, date: "2026-09-15", previous: 75 });
     const recent = recentRecords([...entries, bench("2026-09-22", 85)], NOW);
     expect(recent.map((r) => [r.type, r.value, r.previous])).toContainEqual(["pes", 85, 80]);
@@ -122,7 +126,7 @@ describe("alertes", () => {
       bench("2026-09-22", 80),
     ];
     expect(weightDrops(entries, NOW)).toEqual([
-      expect.objectContaining({ name: "Press de banca", from: 85, to: 80, lastDate: "2026-09-22" }),
+      expect.objectContaining({ name: "Pressió sobre banc", from: 85, to: 80, lastDate: "2026-09-22" }),
     ]);
     expect(weightDrops(entries, NOW)[0].pct).toBeCloseTo(5.88, 1);
   });
@@ -141,10 +145,10 @@ describe("alertes", () => {
       bench("2026-09-15", 80),
     ];
     expect(plateaus(entries, NOW)).toEqual([
-      expect.objectContaining({ name: "Press de banca", sessionsWithoutProgress: 3, best: 80 }),
+      expect.objectContaining({ name: "Pressió sobre banc", sessionsWithoutProgress: 3, best: 80 }),
     ]);
     // Més reps amb el mateix pes (1RM més alt) sí que és progrés.
-    const better = [...entries.slice(0, 3), entry("Press de banca", "2026-09-15", [{ weight: 80, reps: 8 }])];
+    const better = [...entries.slice(0, 3), entry("Pressió sobre banc", "2026-09-15", [{ weight: 80, reps: 8 }])];
     expect(plateaus(better, NOW)).toEqual([]);
   });
 });
@@ -153,8 +157,8 @@ describe("sessions i constància", () => {
   it("durada mitjana per dia de la setmana, sense les tancades automàticament", () => {
     const entries = [
       bench("2026-09-14", 60), // dilluns, 20 min
-      entry("Esquats", "2026-09-21", [{ weight: 100, reps: 5 }], { minutes: 40 }), // dilluns, 40 min
-      entry("Esquats", "2026-09-22", [{ weight: 100, reps: 5 }], { autoClosed: true }), // dimarts
+      entry("Esquat", "2026-09-21", [{ weight: 100, reps: 5 }], { minutes: 40 }), // dilluns, 40 min
+      entry("Esquat", "2026-09-22", [{ weight: 100, reps: 5 }], { autoClosed: true }), // dimarts
     ];
     const byDay = durationByWeekday(entries, NOW);
     expect(byDay[0]).toEqual({ weekday: 0, sessions: 2, avgMs: 30 * 60_000 });
@@ -228,12 +232,38 @@ describe("cos", () => {
     expect(stats.change30).toEqual({ kg: -2, since: "2026-08-20" });
     expect(stats.bmi).toBeCloseTo(80 / 1.8 ** 2, 5);
     expect(stats.relativeStrength).toEqual([
-      { name: "Press de banca", best1RM: 105, ratio: 105 / 80 },
+      { name: "Pressió sobre banc", best1RM: 105, ratio: 105 / 80 },
     ]);
   });
 
   it("sense alçada no hi ha IMC; sense pesos, res", () => {
     expect(bodyStats(weights, undefined, [], NOW).bmi).toBeUndefined();
     expect(bodyStats([], undefined, [], NOW)).toEqual({ relativeStrength: [] });
+  });
+});
+
+describe("calendari", () => {
+  it("resumeix cada dia entrenat", () => {
+    const days = trainingDays([bench("2026-09-22", 60, 60), entry("Planxa amb quatre suports", "2026-09-22", [{ durationSec: 60 }], { kind: "time" })]);
+    expect(days.get("2026-09-22")).toEqual({ volume: 600, sets: 3, exercises: 2 });
+    expect(days.has("2026-09-23")).toBe(false);
+  });
+
+  it("nivell d'intensitat per quartils (sèries si no hi ha pes)", () => {
+    const all = [100, 200, 300, 400].map((volume) => ({ volume, sets: 1, exercises: 1 }));
+    expect(all.map((d) => intensityLevel(d, all))).toEqual([1, 2, 3, 4]);
+    // Sense pes (cardio) es compara per sèries; un sol dia entrenat és el de més càrrega.
+    const cardio = [{ volume: 0, sets: 2, exercises: 1 }, { volume: 0, sets: 6, exercises: 1 }];
+    expect(cardio.map((d) => intensityLevel(d, cardio))).toEqual([2, 4]);
+  });
+
+  it("graella del mes de dilluns a diumenge", () => {
+    const grid = monthGrid("2026-09");
+    expect(grid[0]).toEqual([null, "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"]);
+    expect(grid[grid.length - 1]).toEqual(["2026-09-28", "2026-09-29", "2026-09-30", null, null, null, null]);
+    expect(grid).toHaveLength(5);
+    expect(monthGrid("2027-02")).toHaveLength(4); // febrer del 2027: comença en dilluns i té 28 dies
+    expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01");
   });
 });

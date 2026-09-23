@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import { canonicalExerciseName } from "./catalog-seed";
-import type { BodyWeight, Entry, Profile } from "./types";
+import type { BodyWeight, Entry, Profile, Template, Workout } from "./types";
 
 /**
  * Una sola taula: cada `Entry` ja porta `name`/`kind`, així que no cal cap
@@ -14,6 +14,8 @@ export const db = new Dexie("mygym", {
   entries: EntityTable<Entry, "id">;
   bodyWeights: EntityTable<BodyWeight, "id">;
   profile: EntityTable<Profile, "id">;
+  templates: EntityTable<Template, "id">;
+  workouts: EntityTable<Workout, "id">;
 };
 
 db.version(1).stores({
@@ -39,3 +41,39 @@ db.version(3).stores({
   bodyWeights: "id, &date",
   profile: "id",
 });
+
+// v4: plantilles d'entrenament i la sessió guiada carregada a «Avui».
+db.version(4).stores({
+  entries: "id, date, status",
+  bodyWeights: "id, &date",
+  profile: "id",
+  templates: "id",
+  workouts: "id",
+});
+
+// v5: el catàleg passa a la nomenclatura del TERMCAT. Es reanomenen els noms
+// antics a les entrades, a les plantilles i a la sessió carregada.
+db.version(5)
+  .stores({
+    entries: "id, date, status",
+    bodyWeights: "id, &date",
+    profile: "id",
+    templates: "id",
+    workouts: "id",
+  })
+  .upgrade(async (tx) => {
+    await tx
+      .table<Entry, string>("entries")
+      .toCollection()
+      .modify((e) => {
+        e.name = canonicalExerciseName(e.name);
+      });
+    for (const table of ["templates", "workouts"] as const) {
+      await tx
+        .table<Template | Workout, string>(table)
+        .toCollection()
+        .modify((t) => {
+          for (const ex of t.exercises) ex.name = canonicalExerciseName(ex.name);
+        });
+    }
+  });

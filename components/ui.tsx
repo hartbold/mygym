@@ -22,6 +22,10 @@ export const CARD = "rounded-2xl bg-surface";
 export const FIELD =
   "h-11 w-full min-w-0 rounded-[10px] bg-fill-3 px-3 text-body text-label tabular-nums outline-hidden transition-[box-shadow,background-color] duration-150 placeholder:font-normal placeholder:text-label-3 focus:bg-surface focus:ring-[1.5px] focus:ring-accent";
 
+/** Camp numèric compacte de les files de sèrie (36px d'alt; l'amplada la posa cada camp). */
+export const SET_FIELD =
+  "h-9 min-w-0 rounded-[9px] bg-fill-3 px-1 text-center text-body font-semibold text-label tabular-nums outline-hidden transition-[box-shadow,background-color] duration-150 placeholder:font-normal placeholder:text-label-3 focus:bg-surface focus:ring-[1.5px] focus:ring-accent";
+
 type ButtonVariant = "primary" | "secondary" | "plain" | "destructive";
 type ButtonSize = "sm" | "md" | "lg";
 

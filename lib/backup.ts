@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { canonicalExerciseName } from "./catalog-seed";
 import { isValidDateKey, localDateKey } from "./dates";
-import type { BodyWeight, Entry, EntrySet, Profile } from "./types";
+import type { BodyWeight, Entry, EntrySet, PlannedSet, Profile, Template } from "./types";
 
 /**
  * v2 afegeix el pes corporal i el perfil (opcionals). Les còpies v1 (només
@@ -11,17 +11,18 @@ export interface BackupEnvelope {
   app: "mygym";
   formatVersion: 2;
   exportedAt: string;
-  data: { entries: Entry[]; bodyWeights?: BodyWeight[]; profile?: Profile };
+  data: { entries: Entry[]; bodyWeights?: BodyWeight[]; profile?: Profile; templates?: Template[] };
 }
 
 export function buildBackup(
   entries: Entry[],
   now: number,
-  body: { bodyWeights?: BodyWeight[]; profile?: Profile } = {},
+  body: { bodyWeights?: BodyWeight[]; profile?: Profile; templates?: Template[] } = {},
 ): BackupEnvelope {
   const data: BackupEnvelope["data"] = { entries };
   if (body.bodyWeights?.length) data.bodyWeights = body.bodyWeights;
   if (body.profile) data.profile = body.profile;
+  if (body.templates?.length) data.templates = body.templates;
   return { app: "mygym", formatVersion: 2, exportedAt: new Date(now).toISOString(), data };
 }
 
@@ -88,7 +89,53 @@ export function validateBackup(input: unknown): ValidationResult {
     value.data.profile = profile;
   }
 
+  if (data.templates !== undefined) {
+    if (!Array.isArray(data.templates)) return { ok: false, error: "Les plantilles no són vàlides." };
+    const templates: Template[] = [];
+    for (const raw of data.templates) {
+      const t = validateTemplate(raw);
+      if (!t) return { ok: false, error: "Una de les plantilles no és vàlida." };
+      templates.push(t);
+    }
+    value.data.templates = templates;
+  }
+
   return { ok: true, value };
+}
+
+function validatePlannedSet(raw: unknown): PlannedSet | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const s = raw as Record<string, unknown>;
+  const set: PlannedSet = {};
+  for (const key of ["weight", "reps", "durationSec"] as const) {
+    if (s[key] === undefined || s[key] === null) continue;
+    if (!isFiniteNonNegative(s[key])) return null;
+    set[key] = s[key];
+  }
+  return set;
+}
+
+function validateTemplate(raw: unknown): Template | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const t = raw as Record<string, unknown>;
+  if (typeof t.id !== "string" || !t.id || typeof t.name !== "string") return null;
+  if (!isFiniteNonNegative(t.createdAt) || !isFiniteNonNegative(t.updatedAt) || !Array.isArray(t.exercises)) return null;
+  const exercises: Template["exercises"] = [];
+  for (const rawEx of t.exercises) {
+    const e = (typeof rawEx === "object" && rawEx !== null ? rawEx : {}) as Record<string, unknown>;
+    if (typeof e.id !== "string" || typeof e.name !== "string" || (e.kind !== "reps" && e.kind !== "time")) return null;
+    if (!Array.isArray(e.sets)) return null;
+    const sets: PlannedSet[] = [];
+    for (const rs of e.sets) {
+      const set = validatePlannedSet(rs);
+      if (!set) return null;
+      sets.push(set);
+    }
+    exercises.push({ id: e.id, name: canonicalExerciseName(e.name), kind: e.kind, sets });
+  }
+  const template: Template = { id: t.id, name: t.name, exercises, createdAt: t.createdAt, updatedAt: t.updatedAt };
+  if (typeof t.notes === "string" && t.notes) template.notes = t.notes;
+  return template;
 }
 
 function validateBodyWeight(raw: unknown): BodyWeight | null {
@@ -188,7 +235,7 @@ export interface ImportSummary {
  */
 export async function importBackup(envelope: BackupEnvelope): Promise<ImportSummary> {
   const summary: ImportSummary = { added: 0, updated: 0, skipped: 0 };
-  await db.transaction("rw", [db.entries, db.bodyWeights, db.profile], async () => {
+  await db.transaction("rw", [db.entries, db.bodyWeights, db.profile, db.templates], async () => {
     for (const raw of envelope.data.entries) {
       // raw.endedAt només falta quan raw.status era 'active' (validateEntry
       // ho garanteix per als 'done'); en aquest cas es dedueix de l'última
@@ -226,6 +273,19 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportSumm
         summary.added++;
       } else if (w.updatedAt > existing.updatedAt) {
         await db.bodyWeights.update(existing.id, { kg: w.kg, updatedAt: w.updatedAt });
+        summary.updated++;
+      } else {
+        summary.skipped++;
+      }
+    }
+
+    for (const t of envelope.data.templates ?? []) {
+      const existing = await db.templates.get(t.id);
+      if (!existing) {
+        await db.templates.add(t);
+        summary.added++;
+      } else if (t.updatedAt > existing.updatedAt) {
+        await db.templates.put(t);
         summary.updated++;
       } else {
         summary.skipped++;

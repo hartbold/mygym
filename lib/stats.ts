@@ -425,7 +425,7 @@ export function muscleVolume(entries: Entry[], now: number): MuscleLoad[] {
 // --- Cos ------------------------------------------------------------------
 
 /** Exercicis de referència per a la força relativa, per ordre de preferència. */
-const MAIN_LIFTS = ["Press de banca", "Esquats", "Pes mort", "Press militar"];
+const MAIN_LIFTS = ["Pressió sobre banc", "Esquat", "Pes mort", "Pressió d'espatlles"];
 
 export interface BodyStats {
   current?: BodyWeight;
@@ -456,4 +456,65 @@ export function bodyStats(weights: BodyWeight[], profile: Profile | undefined, e
   const chosen = main.length ? main : [...summaries].sort((a, b) => b.best1RM! - a.best1RM!).slice(0, 3);
   stats.relativeStrength = chosen.map((s) => ({ name: s.name, best1RM: s.best1RM!, ratio: s.best1RM! / current.kg }));
   return stats;
+}
+
+// --- Calendari -------------------------------------------------------------
+
+export interface TrainingDay {
+  volume: number;
+  sets: number;
+  exercises: number;
+}
+
+/** Resum de cada dia entrenat (clau 'YYYY-MM-DD'), per al calendari. */
+export function trainingDays(entries: Entry[]): Map<string, TrainingDay> {
+  const days = new Map<string, TrainingDay>();
+  for (const e of entries) {
+    if (e.sets.length === 0) continue;
+    const d = days.get(e.date) ?? { volume: 0, sets: 0, exercises: 0 };
+    d.exercises++;
+    for (const s of e.sets) {
+      d.sets++;
+      if (s.weight && s.reps) d.volume += s.weight * s.reps;
+    }
+    days.set(e.date, d);
+  }
+  return days;
+}
+
+/**
+ * Nivell d'intensitat (1–4) d'un dia respecte de tots els dies entrenats,
+ * per quartils del volum (o de les sèries, si no hi ha pes: cardio, core).
+ */
+export function intensityLevel(day: TrainingDay, all: TrainingDay[]): 1 | 2 | 3 | 4 {
+  const load = (d: TrainingDay) => d.volume || d.sets;
+  const v = load(day);
+  // Percentil: quina part dels dies entrenats té una càrrega igual o menor.
+  const share = all.filter((d) => load(d) <= v).length / Math.max(1, all.length);
+  return Math.min(4, Math.max(1, Math.ceil(share * 4))) as 1 | 2 | 3 | 4;
+}
+
+/** Setmanes (de dilluns a diumenge) que cobreixen un mes 'YYYY-MM'; els dies de fora són null. */
+export function monthGrid(month: string): (string | null)[][] {
+  const first = `${month}-01`;
+  const weeks: (string | null)[][] = [];
+  let cursor = weekStart(first);
+  while (cursor.slice(0, 7) <= month) {
+    const week: (string | null)[] = [];
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(cursor, i);
+      week.push(day.slice(0, 7) === month ? day : null);
+    }
+    weeks.push(week);
+    cursor = addDays(cursor, 7);
+    if (cursor.slice(0, 7) > month) break;
+  }
+  return weeks;
+}
+
+/** Mes anterior o següent ('YYYY-MM'). */
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }

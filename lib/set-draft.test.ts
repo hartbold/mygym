@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { draftFromSet, emptyDraft, parseSetDraft } from "./set-draft";
+import { draftFromSet, emptyDraft, parsePartialDraft, parseSetDraft } from "./set-draft";
 
 describe("draftFromSet", () => {
   it("escriu els pesos amb coma i els segons amb dues xifres", () => {
@@ -63,5 +63,20 @@ describe("parseSetDraft", () => {
       ok: true,
       value: { weight: undefined, durationSec: 45 },
     });
+  });
+});
+
+describe("parsePartialDraft", () => {
+  it("conserva els kg encara que falten les reps (i a l'inrevés)", () => {
+    expect(parsePartialDraft("reps", { ...emptyDraft(), weight: "100" })).toEqual({ ok: true, value: { weight: 100 } });
+    expect(parsePartialDraft("reps", { ...emptyDraft(), reps: "5" })).toEqual({ ok: true, value: { reps: 5 } });
+    expect(parsePartialDraft("reps", emptyDraft())).toEqual({ ok: true, value: {} });
+    expect(parsePartialDraft("time", { ...emptyDraft(), weight: "10" })).toEqual({ ok: true, value: { weight: 10 } });
+    expect(parsePartialDraft("time", { ...emptyDraft(), min: "2" })).toEqual({ ok: true, value: { durationSec: 120 } });
+  });
+
+  it("continua rebutjant valors no vàlids", () => {
+    expect(parsePartialDraft("reps", { ...emptyDraft(), weight: "x" }).ok).toBe(false);
+    expect(parsePartialDraft("reps", { ...emptyDraft(), reps: "0" }).ok).toBe(false);
   });
 });

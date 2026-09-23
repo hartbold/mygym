@@ -3,7 +3,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { closeStaleActive, startEntry, type NewSetInput } from "@/lib/actions";
-import { CATALOG_SEED, matchesExerciseQuery, normalizeForSearch } from "@/lib/catalog-seed";
 import { db } from "@/lib/db";
 import { localDateKey, nowMs } from "@/lib/dates";
 import {
@@ -14,11 +13,14 @@ import {
   formatWeekdayShort,
 } from "@/lib/format";
 import { buildHash, parseHash, type Route, type View } from "@/lib/route";
-import { lastOccurrence, recentExercises, selectToday } from "@/lib/sessions";
+import { lastOccurrence, selectToday } from "@/lib/sessions";
 import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/set-draft";
-import type { Entry, ExerciseKind } from "@/lib/types";
+import type { Entry, ExerciseKind, Workout } from "@/lib/types";
+import { workoutEntryIds } from "@/lib/workouts";
 import { useNow } from "@/lib/useNow";
+import { ConfirmHost } from "./ConfirmHost";
 import { EntryCard } from "./EntryCard";
+import { ExercisePicker, ExercisePickerSheet } from "./ExercisePicker";
 import { ExerciseDetail } from "./ExerciseDetail";
 import {
   CalendarIcon,
@@ -26,6 +28,7 @@ import {
   ChevronLeftIcon,
   DumbbellIcon,
   GearIcon,
+  ListIcon,
   PlusIcon,
   WarningIcon,
   XmarkIcon,
@@ -34,19 +37,19 @@ import {
 import { Progress } from "./Progress";
 import { SessionView } from "./SessionView";
 import { Settings } from "./Settings";
+import { TemplateEditor } from "./TemplateEditor";
+import { TemplateSheet } from "./TemplateSheet";
+import { addExercise, WorkoutView } from "./WorkoutView";
 import {
   Button,
   CARD,
   EmptyState,
   FIELD,
   IconButton,
-  List,
-  ListItem,
   NavHeader,
   Page,
   SearchField,
   Section,
-  SegmentedControl,
   StatGrid,
   useSheetViewport,
 } from "./ui";
@@ -73,11 +76,6 @@ function prefillLabel(dateKey: string, now: number): string {
   return `${formatWeekdayShort(dateKey)} ${formatDayMonth(dateKey)}`;
 }
 
-const KIND_OPTIONS: { value: ExerciseKind; label: string }[] = [
-  { value: "reps", label: "Reps" },
-  { value: "time", label: "Temps" },
-];
-
 /**
  * `now` val 0 fins que el rellotge arrenca al client: un espai no separable
  * reserva la línia de la data sense mostrar l'1 de gener de 1970.
@@ -88,7 +86,23 @@ function newestFirst(a: Entry, b: Entry): number {
   return b.startedAt - a.startedAt;
 }
 
-function AvuiView({ entries, now, loaded }: { entries: Entry[]; now: number; loaded: boolean }) {
+function AvuiView({
+  entries,
+  now,
+  loaded,
+  workout,
+  onStartTemplate,
+  allEntries,
+}: {
+  entries: Entry[];
+  now: number;
+  loaded: boolean;
+  workout: Workout | undefined;
+  onStartTemplate: () => void;
+  allEntries: Entry[];
+}) {
+  // Les entrades d'una sessió guiada en marxa es veuen dins la sessió, no a «Fets».
+  const inWorkout = workoutEntryIds(workout);
   const setCount = entries.reduce((n, e) => n + e.sets.length, 0);
   const volumeKg = entries.reduce(
     (v, e) => v + e.sets.reduce((sv, s) => sv + (s.weight && s.reps ? s.weight * s.reps : 0), 0),
@@ -99,22 +113,31 @@ function AvuiView({ entries, now, loaded }: { entries: Entry[]; now: number; loa
     0,
   );
   const active = entries.filter((e) => e.status === "active").sort(newestFirst);
-  const done = entries.filter((e) => e.status !== "active").sort(newestFirst);
+  const done = entries.filter((e) => e.status !== "active" && !inWorkout.has(e.id)).sort(newestFirst);
+  const startTemplate = (
+    <Button variant="secondary" className="w-full" onClick={onStartTemplate}>
+      <ListIcon size={18} strokeWidth={2} />
+      Comença una plantilla
+    </Button>
+  );
   const duration = durationMs > 0 ? durationParts(durationMs) : { value: "—", unit: undefined };
 
   return (
     <Page>
       <NavHeader eyebrow={now > 0 ? formatDayLabel(localDateKey(now)) : NBSP} title="Avui" />
-      {entries.length > 0 ? (
+      {entries.length > 0 || workout ? (
         <div className="space-y-8">
-          <StatGrid
-            items={[
-              { label: "Exercicis", value: String(entries.length) },
-              { label: "Sèries", value: String(setCount) },
-              { label: "Volum", value: formatNumber(volumeKg), unit: "kg" },
-              { label: "Temps", value: duration.value, unit: duration.unit },
-            ]}
-          />
+          {entries.length > 0 && (
+            <StatGrid
+              items={[
+                { label: "Exercicis", value: String(entries.length) },
+                { label: "Sèries", value: String(setCount) },
+                { label: "Volum", value: formatNumber(volumeKg), unit: "kg" },
+                { label: "Temps", value: duration.value, unit: duration.unit },
+              ]}
+            />
+          )}
+          {workout ? <WorkoutView workout={workout} entries={allEntries} now={now} /> : startTemplate}
           {active.length > 0 && (
             <Section header="En curs">
               <div className="space-y-3">
@@ -142,8 +165,10 @@ function AvuiView({ entries, now, loaded }: { entries: Entry[]; now: number; loa
               <span className="inline-grid size-4.5 place-items-center rounded-full bg-accent align-middle text-on-accent">
                 <PlusIcon size={12} strokeWidth={2.8} />
               </span>
-              <span className="sr-only">{"el botó d'afegir"}</span> per registrar el primer exercici.
+              <span className="sr-only">{"el botó d'afegir"}</span> per registrar el primer exercici, o
+              comença una rutina preparada.
             </EmptyState>
+            <div className="mx-auto mt-2 max-w-xs">{startTemplate}</div>
           </div>
         )
       )}
@@ -200,7 +225,10 @@ export function AppShell() {
   // `undefined` mentre Dexie carrega: els estats buits esperen a tenir dades.
   const loaded = liveEntries !== undefined;
   const entries = liveEntries ?? [];
+  const workout = useLiveQuery(() => db.workouts.toCollection().first(), []);
   const now = useNow();
+  const [templateSheet, setTemplateSheet] = useState(false);
+  const [addingToWorkout, setAddingToWorkout] = useState(false);
 
   // Sincronitza amb el fragment `#` — mai amb `useSearchParams`/rutes de Next
   // (§Decisió d'arquitectura del pla). `useSyncExternalStore`, no un efecte
@@ -284,7 +312,6 @@ export function AppShell() {
   const [openedAt, setOpenedAt] = useState<number | null>(null);
   const [step, setStep] = useState<"pick" | "sets">("pick");
   const [search, setSearch] = useState("");
-  const [newKind, setNewKind] = useState<ExerciseKind>("reps");
   const [selected, setSelected] = useState<{ name: string; kind: ExerciseKind } | null>(null);
   const [rows, setRows] = useState<RowState[]>([]);
   /** Data ('YYYY-MM-DD') de l'entrada d'on surten els valors precarregats. */
@@ -380,43 +407,7 @@ export function AppShell() {
     }
   }
 
-  const recents = recentExercises(entries, 8);
-  const seedOptions = CATALOG_SEED.filter(
-    (c) => !recents.some((r) => r.name === c.name && r.kind === c.kind),
-  );
-  const allOptions = [...recents, ...seedOptions];
-  // Cerca en català, anglès o castellà (àlies del catàleg), sense accents; la llista es mostra en català.
-  const query = normalizeForSearch(search);
-  const matches = (o: { name: string; kind: ExerciseKind }) => matchesExerciseQuery(o, search);
-  const recentMatches = recents.filter(matches);
-  const seedMatches = seedOptions.filter(matches);
-  const exactMatch =
-    allOptions.some((o) => normalizeForSearch(o.name) === query) ||
-    CATALOG_SEED.some((c) => c.aliases.some((a) => normalizeForSearch(a) === query));
-  const showCreate = query !== "" && !exactMatch;
 
-  function optionList(options: { name: string; kind: ExerciseKind }[]) {
-    return (
-      <List>
-        {options.map((o) => (
-          <ListItem
-            key={`${o.name} ${o.kind}`}
-            title={o.name}
-            ariaLabel={o.name}
-            chevron
-            onClick={() => pickExercise(o.name, o.kind)}
-            trailing={
-              o.kind === "time" ? (
-                <span aria-hidden="true" className="text-subhead text-label-2">
-                  Temps
-                </span>
-              ) : undefined
-            }
-          />
-        ))}
-      </List>
-    );
-  }
 
   const isTime = selected?.kind === "time";
   /** Capçalera i files de la taula de sèries comparteixen columnes: els títols queden centrats sobre els camps. */
@@ -430,7 +421,14 @@ export function AppShell() {
     <>
       <main className="flex-1">
         {route.view === "avui" && (
-          <AvuiView entries={selectToday(entries, now)} now={now} loaded={loaded} />
+          <AvuiView
+            entries={selectToday(entries, now)}
+            allEntries={entries}
+            now={now}
+            loaded={loaded}
+            workout={workout}
+            onStartTemplate={() => setTemplateSheet(true)}
+          />
         )}
         {route.view === "historial" && (
           <SessionView
@@ -451,7 +449,13 @@ export function AppShell() {
           />
         )}
         {route.view === "progres" && (
-          <Progress entries={entries} now={now} loaded={loaded} onOpenExercise={openExercise} />
+          <Progress
+            entries={entries}
+            now={now}
+            loaded={loaded}
+            onOpenExercise={openExercise}
+            onOpenDay={(date) => navigate({ view: "sessio", date })}
+          />
         )}
         {route.view === "exercici" && route.exercise && (
           <ExerciseDetail
@@ -462,7 +466,18 @@ export function AppShell() {
             onOpenDay={(date) => navigate({ view: "sessio", date })}
           />
         )}
-        {route.view === "ajustos" && <Settings />}
+        {route.view === "ajustos" && (
+          <Settings onOpenTemplate={(id) => navigate({ view: "plantilla", templateId: id })} />
+        )}
+        {route.view === "plantilla" && route.templateId && (
+          <TemplateEditor
+            templateId={route.templateId}
+            entries={entries}
+            onBack={() => window.location.replace(buildHash({ view: "ajustos" }))}
+            onStarted={() => navigate({ view: "avui" })}
+            onOpenTemplate={(id) => window.location.replace(buildHash({ view: "plantilla", templateId: id }))}
+          />
+        )}
       </main>
 
       {/* Efecte de vora de scroll d'iOS: el contingut s'esvaeix sota la barra. */}
@@ -479,17 +494,33 @@ export function AppShell() {
           <TabButton active={route.view === "avui"} onClick={() => openTab("avui")} icon={DumbbellIcon} label="Avui" />
           <TabButton active={tabIsHistorial} onClick={() => openTab("historial")} icon={CalendarIcon} label="Historial" />
           <TabButton active={tabIsProgres} onClick={() => openTab("progres")} icon={ChartIcon} label="Progrés" />
-          <TabButton active={route.view === "ajustos"} onClick={() => openTab("ajustos")} icon={GearIcon} label="Ajustos" />
+          <TabButton active={route.view === "ajustos" || route.view === "plantilla"} onClick={() => openTab("ajustos")} icon={GearIcon} label="Ajustos" />
         </div>
         <button
           type="button"
-          onClick={openSheet}
+          onClick={() => (workout ? setAddingToWorkout(true) : openSheet())}
           aria-label="Nou exercici"
           className="grid size-[3.875rem] shrink-0 select-none place-items-center rounded-full bg-accent text-on-accent shadow-float transition-transform duration-150 ease-ios active:scale-[0.94]"
         >
           <PlusIcon size={26} strokeWidth={2.2} />
         </button>
       </nav>
+
+      <ConfirmHost />
+      <TemplateSheet
+        open={templateSheet}
+        onClose={() => setTemplateSheet(false)}
+        onManage={() => navigate({ view: "ajustos" })}
+      />
+      <ExercisePickerSheet
+        open={addingToWorkout}
+        title="Afegeix a l'entrenament"
+        entries={entries}
+        onClose={() => setAddingToWorkout(false)}
+        onPick={(name, kind) => {
+          if (workout) void addExercise(workout.id, entries, name, kind);
+        }}
+      />
 
       <dialog
         ref={dialogRef}
@@ -539,7 +570,7 @@ export function AppShell() {
                   autoFocus
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cerca un exercici…"
+                  placeholder="Cerca un exercici o una màquina…"
                   aria-label="Cerca un exercici"
                 />
               </div>
@@ -554,27 +585,9 @@ export function AppShell() {
             }`}
           >
             {step === "pick" ? (
-              <div className="space-y-7">
-                {showCreate && (
-                  <div className={`${CARD} space-y-3.5 p-4`}>
-                    <p className="text-headline break-words">Crea «{search.trim()}»</p>
-                    <SegmentedControl
-                      label="Tipus d'exercici"
-                      options={KIND_OPTIONS}
-                      value={newKind}
-                      onChange={setNewKind}
-                    />
-                    <Button className="w-full" onClick={() => pickExercise(search.trim(), newKind)}>
-                      Crea i continua
-                    </Button>
-                  </div>
-                )}
-                {recentMatches.length > 0 && <Section header="Recents">{optionList(recentMatches)}</Section>}
-                {seedMatches.length > 0 && (
-                  <Section header="Tots els exercicis">{optionList(seedMatches)}</Section>
-                )}
-              </div>
-            ) : (
+              <ExercisePicker entries={entries} search={search} onPick={pickExercise} />
+            ) : null}
+            {step === "sets" && (
               selected && (
                 <Section
                   footer={prefillDate && `Valors de l'última vegada (${prefillLabel(prefillDate, now)}).`}

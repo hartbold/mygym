@@ -14,16 +14,13 @@ import { nowMs } from "@/lib/dates";
 import { formatClock, formatClockTimer, formatDuration, formatWeight } from "@/lib/format";
 import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/set-draft";
 import type { Entry, EntrySet, ExerciseKind } from "@/lib/types";
+import { confirmAction } from "./ConfirmHost";
 import { CheckIcon, PlusIcon, TrashIcon, WarningIcon, XmarkIcon } from "./icons";
-import { Button, CARD, FIELD, IconButton } from "./ui";
+import { Button, CARD, FIELD, IconButton, SET_FIELD } from "./ui";
 
 /** Xip d'estat de la capçalera (cronòmetre en directe o «Inactiu»). */
 const CHIP =
   "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-subhead font-semibold tabular-nums";
-
-/** Camp numèric compacte per editar una sèrie dins la fila (36px d'alt; l'amplada la posa cada camp). */
-const SET_FIELD =
-  "h-9 min-w-0 rounded-[9px] bg-fill-3 px-1 text-center text-body font-semibold text-label tabular-nums outline-hidden transition-[box-shadow,background-color] duration-150 placeholder:font-normal placeholder:text-label-3 focus:bg-surface focus:ring-[1.5px] focus:ring-accent";
 
 export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
   const [finishing, setFinishing] = useState(false);
@@ -101,12 +98,18 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
   }
 
   async function onRemoveSet(setId: string) {
-    if (!confirm("Esborrar aquesta sèrie?")) return;
+    if (!(await confirmAction({ title: "Esborrar aquesta sèrie?", confirmLabel: "Esborra", destructive: true }))) return;
     await removeSet(entry.id, setId, nowMs());
   }
 
   async function onDelete() {
-    if (!confirm(`Esborrar «${entry.name}» sencer?`)) return;
+    const ok = await confirmAction({
+      title: `Esborrar «${entry.name}»?`,
+      message: "S'esborren totes les sèries d'aquest exercici.",
+      confirmLabel: "Esborra",
+      destructive: true,
+    });
+    if (!ok) return;
     await deleteEntry(entry.id);
   }
 

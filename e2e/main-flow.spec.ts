@@ -7,7 +7,7 @@ test("crea un exercici amb sèries de pesos diferents, l'acaba en prémer «Nou 
 
   // --- Primer exercici: Press banca, 2 sèries amb pesos diferents ---
   await page.getByRole("button", { name: "Nou exercici", exact: true }).click();
-  await page.getByRole("button", { name: "Press de banca", exact: true }).click();
+  await page.getByRole("button", { name: "Pressió sobre banc", exact: true }).click();
 
   const kgInputs = page.getByPlaceholder("kg");
   const repsInputs = page.getByPlaceholder("reps");
@@ -18,7 +18,7 @@ test("crea un exercici amb sèries de pesos diferents, l'acaba en prémer «Nou 
   await page.getByRole("button", { name: "Esborra la fila" }).last().click(); // treu la 3a fila buida
   await page.getByRole("button", { name: "Desa" }).click();
 
-  const pressCard = page.locator("article", { hasText: "Press de banca" });
+  const pressCard = page.locator("article", { hasText: "Pressió sobre banc" });
   await expect(pressCard).toBeVisible();
   await expect(pressCard.getByRole("button", { name: "Acaba" })).toBeVisible();
   await expect(pressCard.getByText("60,5 kg", { exact: false })).toBeVisible();
@@ -26,7 +26,7 @@ test("crea un exercici amb sèries de pesos diferents, l'acaba en prémer «Nou 
 
   // --- Segon exercici: Esquats — ha d'acabar «Press banca» automàticament ---
   await page.getByRole("button", { name: "Nou exercici", exact: true }).click();
-  await page.getByRole("button", { name: "Esquats", exact: true }).click();
+  await page.getByRole("button", { name: "Esquat", exact: true }).click();
   await kgInputs.nth(0).fill("100");
   await repsInputs.nth(0).fill("5");
   await page.getByRole("button", { name: "Esborra la fila" }).last().click();
@@ -34,7 +34,7 @@ test("crea un exercici amb sèries de pesos diferents, l'acaba en prémer «Nou 
   await page.getByRole("button", { name: "Desa" }).click();
 
   await expect(pressCard.getByRole("button", { name: "Acaba" })).toHaveCount(0);
-  const squatsCard = page.locator("article", { hasText: "Esquats" });
+  const squatsCard = page.locator("article", { hasText: "Esquat" });
   await expect(squatsCard.getByRole("button", { name: "Acaba" })).toBeVisible();
 
   // --- «Acaba» explícit ---
@@ -48,6 +48,6 @@ test("crea un exercici amb sèries de pesos diferents, l'acaba en prémer «Nou 
   // --- Persisteix en recarregar ---
   await page.reload();
   await page.getByRole("button", { name: "Avui", exact: true }).click();
-  await expect(page.locator("article", { hasText: "Press de banca" })).toBeVisible();
-  await expect(page.locator("article", { hasText: "Esquats" })).toBeVisible();
+  await expect(page.locator("article", { hasText: "Pressió sobre banc" })).toBeVisible();
+  await expect(page.locator("article", { hasText: "Esquat" })).toBeVisible();
 });

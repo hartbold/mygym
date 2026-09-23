@@ -26,13 +26,13 @@ async function seed(page: Page) {
       };
     };
     const entries = [
-      entry("Press de banca", 30, 80),
-      entry("Press de banca", 23, 82.5),
-      entry("Press de banca", 16, 85),
-      entry("Press de banca", 9, 77.5),
-      entry("Press de banca", 2, 80),
-      entry("Esquats", 10, 100),
-      entry("Esquats", 1, 105),
+      entry("Pressió sobre banc", 30, 80),
+      entry("Pressió sobre banc", 23, 82.5),
+      entry("Pressió sobre banc", 16, 85),
+      entry("Pressió sobre banc", 9, 77.5),
+      entry("Pressió sobre banc", 2, 80),
+      entry("Esquat", 10, 100),
+      entry("Esquat", 1, 105),
     ];
     const db = await new Promise<IDBDatabase>((res, rej) => {
       const r = indexedDB.open("mygym");
@@ -55,13 +55,23 @@ test("Progrés mostra rècords, baixades, el detall d'un exercici i el pes corpo
   await page.getByRole("button", { name: "Progrés", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Progrés" })).toBeVisible();
 
-  await expect(page.getByRole("button", { name: /^Rècord a Esquats/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Baixada a Press de banca/ })).toContainText("80 kg, abans 85 kg");
+  await expect(page.getByRole("button", { name: /^Rècord a Esquat/ })).toBeVisible();
+
+  // Calendari mensual: els dies entrenats són botons que obren la sessió.
+  const days = page.getByRole("grid").getByRole("button");
+  await expect(days.first()).toHaveAttribute("aria-label", /exercici/);
+  const count = await days.count();
+  expect(count).toBeGreaterThan(0);
+  await days.last().click();
+  await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Progrés");
+  await page.goBack();
+  await expect(page.getByRole("heading", { level: 1, name: "Progrés" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Baixada a Pressió sobre banc/ })).toContainText("80 kg, abans 85 kg");
 
   // Detall de l'exercici: gràfica amb el resum en text.
-  await page.getByRole("button", { name: /^Esquats/ }).last().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Esquats" })).toBeVisible();
-  await expect(page.getByRole("img", { name: /^Evolució d'Esquats|^Evolució de Esquats/ })).toHaveAttribute(
+  await page.getByRole("button", { name: /^Esquat / }).last().click();
+  await expect(page.getByRole("heading", { level: 1, name: "Esquat" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /^Evolució d'Esquat/ })).toHaveAttribute(
     "aria-label",
     /105/,
   );

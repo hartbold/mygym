@@ -9,6 +9,9 @@ desen **al navegador** (IndexedDB) — no hi ha cap servidor ni compte.
 La pestanya **Progrés** mostra rècords, baixades de pes i estancaments,
 constància setmanal, durada mitjana per dia, sèries per grup muscular,
 l'evolució de cada exercici i el pes corporal (amb IMC i força relativa).
+Les **plantilles** (Ajustos) guarden rutines senceres amb exercicis, sèries i
+pesos; es carreguen a «Avui», s'hi marca cada sèrie en acabar-la (la sessió
+comença amb la primera marca) i es poden importar i exportar en JSON.
 Instal·lable com a PWA, funciona sense connexió després de la primera
 visita, i permet exportar/importar còpies de seguretat en JSON.
 

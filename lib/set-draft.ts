@@ -59,3 +59,40 @@ export function parseSetDraft(kind: ExerciseKind, draft: SetDraft): ParsedDraft 
   }
   return { ok: true, value: { weight, durationSec } };
 }
+
+/**
+ * Com `parseSetDraft`, però conserva el que s'hagi escrit encara que la
+ * sèrie no sigui completa (p. ex. només els kg): per a plantilles i sessions
+ * guiades, on les sèries es poden anar omplint a poc a poc.
+ */
+export function parsePartialDraft(
+  kind: ExerciseKind,
+  draft: SetDraft,
+): { ok: true; value: NewSetInput } | { ok: false; error: string } {
+  const value: NewSetInput = {};
+  if (draft.weight.trim() !== "") {
+    const weight = parseDecimal(draft.weight);
+    if (weight === undefined) return { ok: false, error: "El pes no és vàlid (fes servir coma o punt decimal)." };
+    value.weight = weight;
+  }
+  if (kind === "reps") {
+    if (draft.reps.trim() !== "") {
+      const reps = Number(draft.reps);
+      if (!Number.isInteger(reps) || reps < 1) {
+        return { ok: false, error: "Les repeticions han de ser un número enter ≥ 1." };
+      }
+      value.reps = reps;
+    }
+    return { ok: true, value };
+  }
+  if (draft.min.trim() !== "" || draft.sec.trim() !== "") {
+    const min = draft.min.trim() === "" ? 0 : Number(draft.min);
+    const sec = draft.sec.trim() === "" ? 0 : Number(draft.sec);
+    const durationSec = min * 60 + sec;
+    if (!Number.isFinite(durationSec) || durationSec < 1) {
+      return { ok: false, error: "La durada ha de ser d'almenys 1 segon." };
+    }
+    value.durationSec = durationSec;
+  }
+  return { ok: true, value };
+}

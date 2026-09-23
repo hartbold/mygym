@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MUSCLE_LABELS, muscleGroupOf } from "@/lib/catalog-seed";
 import { localDateKey } from "@/lib/dates";
-import { formatClockTimer, formatDayLabel, formatNumber, formatShortDate } from "@/lib/format";
+import { deName, formatClockTimer, formatDayLabel, formatNumber, formatShortDate } from "@/lib/format";
 import {
   addDays,
   exerciseProgress,
@@ -117,7 +117,7 @@ export function ExerciseDetail({
                     points={points}
                     format={format}
                     formatDate={formatShortDate}
-                    ariaLabel={`Evolució de ${exercise.name}: ${points.map((p) => `${formatShortDate(p.date)} ${format(p.value)}`).join(", ")}.`}
+                    ariaLabel={`Evolució ${deName(exercise.name)}: ${points.map((p) => `${formatShortDate(p.date)} ${format(p.value)}`).join(", ")}.`}
                   />
                 ) : (
                   <p className="px-1 py-8 text-center text-subhead text-label-2">Cap dada en aquest període.</p>

@@ -179,3 +179,53 @@ export function RetryIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function ChartIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 20h16M6.5 16.5v-4M11 16.5V8M15.5 16.5v-6M20 16.5V5" />
+    </Icon>
+  );
+}
+
+export function TrophyIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M7.5 4h9v5.5a4.5 4.5 0 0 1-9 0V4ZM7.5 6H4.75v1.5A3 3 0 0 0 7.75 10.5M16.5 6h2.75v1.5a3 3 0 0 1-3 3M12 14v3.5M8.5 20.5h7M9.5 17.5h5v3h-5z" />
+    </Icon>
+  );
+}
+
+export function TrendDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m3.5 7.5 6 6 4-4 7 7M20.5 11.5v5h-5" />
+    </Icon>
+  );
+}
+
+export function PlateauIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.5 17.5 8 11h8.5M16.5 11l4 0M13 7.5l3.5 3.5-3.5 3.5" />
+    </Icon>
+  );
+}
+
+export function ScaleIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
+      <path d="M8 9.5a5.5 5.5 0 0 1 8 0M12 12l1.5-3" />
+    </Icon>
+  );
+}
+
+export function RulerIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="8" y="2.5" width="8" height="19" rx="2" />
+      <path d="M8 6.5h3M8 10h4.5M8 13.5h3M8 17h4.5" />
+    </Icon>
+  );
+}

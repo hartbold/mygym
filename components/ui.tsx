@@ -363,3 +363,28 @@ export function SearchField(props: Omit<InputHTMLAttributes<HTMLInputElement>, "
     </label>
   );
 }
+
+/**
+ * Mentre un full (`.sheet`) és obert, li passa l'àrea visible real
+ * (`visualViewport`) com a --vvh/--vvtop: a l'iPhone, amb el teclat obert,
+ * el viewport de layout no s'encongeix i la part de dalt quedaria amagada.
+ */
+export function useSheetViewport(dialogRef: React.RefObject<HTMLDialogElement | null>, open: boolean) {
+  useEffect(() => {
+    const d = dialogRef.current;
+    const vv = window.visualViewport;
+    if (!open || !d || !vv) return;
+    const viewport = vv;
+    function sync() {
+      d!.style.setProperty("--vvh", `${viewport.height}px`);
+      d!.style.setProperty("--vvtop", `${viewport.offsetTop}px`);
+    }
+    sync();
+    viewport.addEventListener("resize", sync);
+    viewport.addEventListener("scroll", sync);
+    return () => {
+      viewport.removeEventListener("resize", sync);
+      viewport.removeEventListener("scroll", sync);
+    };
+  }, [dialogRef, open]);
+}

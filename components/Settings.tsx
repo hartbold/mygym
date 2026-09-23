@@ -1,12 +1,14 @@
 "use client";
 
+import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { isPlausibleHeight, setHeight } from "@/lib/body";
 import { backupFileName, buildBackup, importBackup, parseBackupFile } from "@/lib/backup";
 import { db } from "@/lib/db";
-import { localDateKey, nowMs } from "@/lib/dates";
+import { localDateKey, nowMs, parseDecimal } from "@/lib/dates";
 import { formatDayMonth } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
-import { CheckIcon, ExportIcon, ImportIcon, InstallIcon, StorageIcon, WarningIcon } from "./icons";
+import { CheckIcon, ExportIcon, ImportIcon, InstallIcon, RulerIcon, StorageIcon, WarningIcon } from "./icons";
 import { List, ListItem, NavHeader, Page, Section } from "./ui";
 
 const LAST_BACKUP_KEY = "mygym:lastBackupAt";
@@ -118,7 +120,10 @@ export function Settings() {
   async function onExport() {
     const now = nowMs();
     const entries = await db.entries.toArray();
-    const envelope = buildBackup(entries, now);
+    const envelope = buildBackup(entries, now, {
+      bodyWeights: await db.bodyWeights.toArray(),
+      profile: await db.profile.get("me"),
+    });
     const fileName = backupFileName(now);
     const file = new File([JSON.stringify(envelope, null, 2)], fileName, {
       type: "application/json",
@@ -171,6 +176,8 @@ export function Settings() {
       <NavHeader title="Ajustos" />
 
       <div className="space-y-8">
+        <ProfileSection />
+
         <Section
           header="Còpia de seguretat"
           footer={
@@ -304,10 +311,103 @@ export function Settings() {
         </Section>
 
         <div className="px-4 text-center text-footnote text-label-2">
-          <p className="font-semibold">MY GYM</p>
+          <p>
+            <span className="font-semibold">MY GYM</span>
+            {" · "}
+            <a
+              href="https://github.com/hartbold/mygym"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-label-3 underline-offset-2 active:opacity-50"
+            >
+              Codi a GitHub
+            </a>
+          </p>
           <p>Les dades només es desen en aquest dispositiu.</p>
         </div>
       </div>
     </Page>
+  );
+}
+
+/**
+ * Alçada (per a l'IMC de la pestanya Progrés). Es desa en sortir del camp o
+ * amb Enter; buit l'esborra. El pes es registra des de Progrés, amb data.
+ */
+function ProfileSection() {
+  const profile = useLiveQuery(() => db.profile.get("me"), []);
+  const saved = profile?.heightCm !== undefined ? String(profile.heightCm) : "";
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const value = draft ?? saved;
+
+  async function commit() {
+    if (draft === null) return;
+    const text = draft.trim();
+    if (text === "") {
+      await setHeight(undefined, nowMs());
+    } else {
+      const cm = parseDecimal(text);
+      if (cm === undefined || !isPlausibleHeight(cm)) {
+        setError("Escriu l'alçada en centímetres (per exemple, 178).");
+        return;
+      }
+      await setHeight(Math.round(cm), nowMs());
+    }
+    setDraft(null);
+    setError(null);
+  }
+
+  return (
+    <Section
+      header="Perfil"
+      footer={
+        error ? (
+          <span role="alert" className="text-danger-ink">
+            {error}
+          </span>
+        ) : (
+          "Serveix per calcular l'IMC. El pes corporal es registra des de Progrés."
+        )
+      }
+    >
+      <List>
+        <ListItem
+          leading={
+            <IconTile muted>
+              <RulerIcon size={18} />
+            </IconTile>
+          }
+          title={<label htmlFor="height-input">Alçada</label>}
+          trailing={
+            <span className="flex items-center gap-1.5">
+              <input
+                id="height-input"
+                inputMode="numeric"
+                autoComplete="off"
+                enterKeyHint="done"
+                placeholder="—"
+                value={value}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setError(null);
+                }}
+                onBlur={() => void commit()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  if (e.key === "Escape") {
+                    setDraft(null);
+                    setError(null);
+                  }
+                }}
+                aria-invalid={error ? true : undefined}
+                className="h-9 w-20 rounded-[9px] bg-fill-3 px-2.5 text-right text-body font-semibold text-label tabular-nums outline-hidden transition-[box-shadow,background-color] duration-150 placeholder:font-normal placeholder:text-label-3 focus:bg-surface focus:ring-[1.5px] focus:ring-accent"
+              />
+              <span aria-hidden="true">cm</span>
+            </span>
+          }
+        />
+      </List>
+    </Section>
   );
 }

@@ -1,21 +1,28 @@
 import { db } from "./db";
+import { canonicalExerciseName } from "./catalog-seed";
 import { isValidDateKey, localDateKey } from "./dates";
-import type { Entry, EntrySet } from "./types";
+import type { BodyWeight, Entry, EntrySet, Profile } from "./types";
 
+/**
+ * v2 afegeix el pes corporal i el perfil (opcionals). Les còpies v1 (només
+ * `entries`) es continuen important igual.
+ */
 export interface BackupEnvelope {
   app: "mygym";
-  formatVersion: 1;
+  formatVersion: 2;
   exportedAt: string;
-  data: { entries: Entry[] };
+  data: { entries: Entry[]; bodyWeights?: BodyWeight[]; profile?: Profile };
 }
 
-export function buildBackup(entries: Entry[], now: number): BackupEnvelope {
-  return {
-    app: "mygym",
-    formatVersion: 1,
-    exportedAt: new Date(now).toISOString(),
-    data: { entries },
-  };
+export function buildBackup(
+  entries: Entry[],
+  now: number,
+  body: { bodyWeights?: BodyWeight[]; profile?: Profile } = {},
+): BackupEnvelope {
+  const data: BackupEnvelope["data"] = { entries };
+  if (body.bodyWeights?.length) data.bodyWeights = body.bodyWeights;
+  if (body.profile) data.profile = body.profile;
+  return { app: "mygym", formatVersion: 2, exportedAt: new Date(now).toISOString(), data };
 }
 
 export function backupFileName(now: number): string {
@@ -45,7 +52,7 @@ export function validateBackup(input: unknown): ValidationResult {
   if (obj.app !== "mygym") {
     return { ok: false, error: "Aquest fitxer no és una còpia de MY GYM." };
   }
-  if (obj.formatVersion !== 1) {
+  if (obj.formatVersion !== 1 && obj.formatVersion !== 2) {
     return { ok: false, error: `Versió de format desconeguda (${String(obj.formatVersion)}).` };
   }
   if (typeof obj.exportedAt !== "string") {
@@ -63,10 +70,45 @@ export function validateBackup(input: unknown): ValidationResult {
     entries.push(entry);
   }
 
-  return {
-    ok: true,
-    value: { app: "mygym", formatVersion: 1, exportedAt: obj.exportedAt, data: { entries } },
-  };
+  const value: BackupEnvelope = { app: "mygym", formatVersion: 2, exportedAt: obj.exportedAt, data: { entries } };
+
+  if (data.bodyWeights !== undefined) {
+    if (!Array.isArray(data.bodyWeights)) return { ok: false, error: "El registre de pes no és vàlid." };
+    const weights: BodyWeight[] = [];
+    for (const raw of data.bodyWeights) {
+      const w = validateBodyWeight(raw);
+      if (!w) return { ok: false, error: "Un dels registres de pes no és vàlid." };
+      weights.push(w);
+    }
+    value.data.bodyWeights = weights;
+  }
+  if (data.profile !== undefined) {
+    const profile = validateProfile(data.profile);
+    if (!profile) return { ok: false, error: "El perfil no és vàlid." };
+    value.data.profile = profile;
+  }
+
+  return { ok: true, value };
+}
+
+function validateBodyWeight(raw: unknown): BodyWeight | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const w = raw as Record<string, unknown>;
+  if (typeof w.id !== "string" || w.id === "") return null;
+  if (typeof w.date !== "string" || !isValidDateKey(w.date)) return null;
+  if (typeof w.kg !== "number" || !Number.isFinite(w.kg) || w.kg <= 0) return null;
+  if (!isFiniteNonNegative(w.updatedAt)) return null;
+  return { id: w.id, date: w.date, kg: w.kg, updatedAt: w.updatedAt };
+}
+
+function validateProfile(raw: unknown): Profile | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const p = raw as Record<string, unknown>;
+  if (p.id !== "me" || !isFiniteNonNegative(p.updatedAt)) return null;
+  if (p.heightCm !== undefined && (typeof p.heightCm !== "number" || !(p.heightCm > 0))) return null;
+  const profile: Profile = { id: "me", updatedAt: p.updatedAt };
+  if (typeof p.heightCm === "number") profile.heightCm = p.heightCm;
+  return profile;
 }
 
 function isFiniteNonNegative(v: unknown): v is number {
@@ -101,7 +143,8 @@ function validateEntry(raw: unknown): Entry | null {
 
   const entry: Entry = {
     id: e.id,
-    name: e.name,
+    // Còpies fetes abans del catàleg en català: mateix nom que les entrades migrades.
+    name: canonicalExerciseName(e.name),
     kind: e.kind,
     date: e.date,
     startedAt: e.startedAt as number,
@@ -145,7 +188,7 @@ export interface ImportSummary {
  */
 export async function importBackup(envelope: BackupEnvelope): Promise<ImportSummary> {
   const summary: ImportSummary = { added: 0, updated: 0, skipped: 0 };
-  await db.transaction("rw", db.entries, async () => {
+  await db.transaction("rw", [db.entries, db.bodyWeights, db.profile], async () => {
     for (const raw of envelope.data.entries) {
       // raw.endedAt només falta quan raw.status era 'active' (validateEntry
       // ho garanteix per als 'done'); en aquest cas es dedueix de l'última
@@ -172,6 +215,27 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportSumm
       } else {
         summary.skipped++;
       }
+    }
+
+    // Pes corporal: un registre per dia, així que es fusiona per data (no per
+    // id: dos dispositius poden haver anotat el mateix dia amb ids diferents).
+    for (const w of envelope.data.bodyWeights ?? []) {
+      const existing = await db.bodyWeights.where("date").equals(w.date).first();
+      if (!existing) {
+        await db.bodyWeights.add(w);
+        summary.added++;
+      } else if (w.updatedAt > existing.updatedAt) {
+        await db.bodyWeights.update(existing.id, { kg: w.kg, updatedAt: w.updatedAt });
+        summary.updated++;
+      } else {
+        summary.skipped++;
+      }
+    }
+
+    const profile = envelope.data.profile;
+    if (profile) {
+      const existing = await db.profile.get("me");
+      if (!existing || profile.updatedAt > existing.updatedAt) await db.profile.put(profile);
     }
   });
   return summary;

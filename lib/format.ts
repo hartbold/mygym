@@ -90,3 +90,9 @@ export function formatClockTimer(seconds: number): string {
   const s = total % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+
+/** "3/9": data curta per a eixos de gràfiques. */
+export function formatShortDate(dateKey: string): string {
+  const [, m, d] = dateKey.split("-").map(Number);
+  return `${d}/${m}`;
+}

@@ -6,6 +6,9 @@ Gestor d'entrenaments molt senzill: a cada sessió (agrupada automàticament
 per dia) es van afegint exercicis a mesura que es fan, amb sèries de pes i
 repeticions (o de temps) editables independentment. Totes les dades es
 desen **al navegador** (IndexedDB) — no hi ha cap servidor ni compte.
+La pestanya **Progrés** mostra rècords, baixades de pes i estancaments,
+constància setmanal, durada mitjana per dia, sèries per grup muscular,
+l'evolució de cada exercici i el pes corporal (amb IMC i força relativa).
 Instal·lable com a PWA, funciona sense connexió després de la primera
 visita, i permet exportar/importar còpies de seguretat en JSON.
 

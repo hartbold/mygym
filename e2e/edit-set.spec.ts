@@ -16,12 +16,12 @@ test("les sèries de la targeta es poden editar: «+ Sèrie» obre la nova en ed
   page,
 }) => {
   await page.goto("/");
-  await createEntry(page, "Press banca", async (p) => {
+  await createEntry(page, "Press de banca", async (p) => {
     await p.getByPlaceholder("kg").nth(0).fill("60");
     await p.getByPlaceholder("reps").nth(0).fill("10");
   });
 
-  const card = page.locator("article", { hasText: "Press banca" });
+  const card = page.locator("article", { hasText: "Press de banca" });
   const set = (n: number) => card.getByRole("button", { name: new RegExp(`^Edita la sèrie ${n}:`) });
 
   // «+ Sèrie» copia l'última i la deixa en edició per ajustar pes i reps.
@@ -73,6 +73,29 @@ test("les sèries de la targeta es poden editar: «+ Sèrie» obre la nova en ed
   await page.reload();
   await expect(set(1)).toContainText("60 kg × 12 reps");
   await expect(set(3)).toContainText("62,5 kg × 6 reps");
+});
+
+test("el selector es pot cercar en anglès i castellà, però només mostra noms en català", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Nou exercici", exact: true }).click();
+  const search = page.getByRole("searchbox", { name: "Cerca un exercici" });
+  const dialog = page.getByRole("dialog");
+
+  for (const [query, catalan] of [
+    ["deadlift", "Pes mort"],
+    ["peso muerto", "Pes mort"],
+    ["plancha", "Planxa"],
+    ["bench press", "Press de banca"],
+  ]) {
+    await search.fill(query);
+    await expect(dialog.getByRole("button", { name: catalan, exact: true })).toBeVisible();
+    await expect(dialog.getByText(query, { exact: true })).toHaveCount(0);
+    // Un àlies conegut sencer no proposa crear un exercici nou.
+    await expect(dialog.getByRole("button", { name: "Crea i continua" })).toHaveCount(0);
+  }
+  // Una part d'un àlies també troba l'exercici.
+  await search.fill("bench");
+  await expect(dialog.getByRole("button", { name: "Press de banca", exact: true })).toBeVisible();
 });
 
 test("la durada d'un exercici de temps es pot corregir un cop fet", async ({ page }) => {

@@ -5,6 +5,8 @@ import type { Entry } from "./types";
 
 beforeEach(async () => {
   await db.entries.clear();
+  await db.bodyWeights.clear();
+  await db.profile.clear();
 });
 
 function entry(overrides: Partial<Entry> & Pick<Entry, "id">): Entry {
@@ -34,7 +36,7 @@ describe("validateBackup", () => {
   });
 
   it("rejects an unknown format version", () => {
-    const result = validateBackup({ app: "mygym", formatVersion: 2, exportedAt: "x", data: { entries: [] } });
+    const result = validateBackup({ app: "mygym", formatVersion: 3, exportedAt: "x", data: { entries: [] } });
     expect(result.ok).toBe(false);
   });
 
@@ -115,5 +117,39 @@ describe("importBackup (merge-only)", () => {
 
     const actives = await db.entries.where("status").equals("active").toArray();
     expect(actives).toHaveLength(0);
+  });
+});
+
+describe("format v2: pes corporal i perfil", () => {
+  it("continua acceptant còpies v1 (només entrades)", () => {
+    const v1 = { app: "mygym", formatVersion: 1, exportedAt: "x", data: { entries: [entry({ id: "1" })] } };
+    const result = validateBackup(v1);
+    expect(result.ok && result.value.data.entries).toHaveLength(1);
+  });
+
+  it("fa l'anada i tornada del pes i l'alçada", async () => {
+    const envelope = buildBackup([], 5000, {
+      bodyWeights: [{ id: "w1", date: "2026-09-20", kg: 80.5, updatedAt: 10 }],
+      profile: { id: "me", heightCm: 178, updatedAt: 10 },
+    });
+    const parsed = parseBackupFile(JSON.stringify(envelope));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    await importBackup(parsed.value);
+    expect(await db.bodyWeights.toArray()).toEqual([{ id: "w1", date: "2026-09-20", kg: 80.5, updatedAt: 10 }]);
+    expect(await db.profile.get("me")).toEqual({ id: "me", heightCm: 178, updatedAt: 10 });
+  });
+
+  it("fusiona el pes per data: guanya el més recent, encara que l'id sigui un altre", async () => {
+    await db.bodyWeights.add({ id: "local", date: "2026-09-20", kg: 81, updatedAt: 50 });
+    await importBackup(buildBackup([], 0, { bodyWeights: [{ id: "remote", date: "2026-09-20", kg: 79, updatedAt: 100 }] }));
+    expect(await db.bodyWeights.toArray()).toEqual([{ id: "local", date: "2026-09-20", kg: 79, updatedAt: 100 }]);
+    await importBackup(buildBackup([], 0, { bodyWeights: [{ id: "old", date: "2026-09-20", kg: 90, updatedAt: 10 }] }));
+    expect((await db.bodyWeights.get("local"))?.kg).toBe(79);
+  });
+
+  it("rebutja un pes no vàlid", () => {
+    const bad = buildBackup([], 0, { bodyWeights: [{ id: "w", date: "2026-02-30", kg: 80, updatedAt: 1 }] });
+    expect(validateBackup(bad).ok).toBe(false);
   });
 });

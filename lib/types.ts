@@ -24,3 +24,19 @@ export interface Entry {
   sets: EntrySet[];
   updatedAt: number;
 }
+
+/** Un registre de pes corporal per dia (el darrer del dia substitueix l'anterior). */
+export interface BodyWeight {
+  id: string;
+  /** 'YYYY-MM-DD' local. */
+  date: string;
+  kg: number;
+  updatedAt: number;
+}
+
+/** Dades de l'usuari que no canvien sovint. Una sola fila, `id: "me"`. */
+export interface Profile {
+  id: "me";
+  heightCm?: number;
+  updatedAt: number;
+}

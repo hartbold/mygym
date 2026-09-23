@@ -29,3 +29,16 @@ describe("buildHash", () => {
     });
   });
 });
+
+describe("progrés i exercici", () => {
+  it("fa l'anada i tornada del detall d'un exercici, amb accents i espais", () => {
+    const route = { view: "exercici" as const, exercise: { name: "Fons en paral·leles", kind: "reps" as const } };
+    expect(parseHash(buildHash(route))).toEqual(route);
+    expect(parseHash("#progres")).toEqual({ view: "progres" });
+  });
+
+  it("un detall sense nom o amb un tipus desconegut torna a Progrés", () => {
+    expect(parseHash("#exercici")).toEqual({ view: "progres" });
+    expect(parseHash("#exercici?n=Planxa&k=x")).toEqual({ view: "progres" });
+  });
+});

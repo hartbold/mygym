@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { closeStaleActive, startEntry, type NewSetInput } from "@/lib/actions";
-import { CATALOG_SEED } from "@/lib/catalog-seed";
+import { CATALOG_SEED, matchesExerciseQuery, normalizeForSearch } from "@/lib/catalog-seed";
 import { db } from "@/lib/db";
 import { localDateKey, nowMs } from "@/lib/dates";
 import {
@@ -19,8 +19,10 @@ import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/se
 import type { Entry, ExerciseKind } from "@/lib/types";
 import { useNow } from "@/lib/useNow";
 import { EntryCard } from "./EntryCard";
+import { ExerciseDetail } from "./ExerciseDetail";
 import {
   CalendarIcon,
+  ChartIcon,
   ChevronLeftIcon,
   DumbbellIcon,
   GearIcon,
@@ -29,6 +31,7 @@ import {
   XmarkIcon,
   type IconProps,
 } from "./icons";
+import { Progress } from "./Progress";
 import { SessionView } from "./SessionView";
 import { Settings } from "./Settings";
 import {
@@ -45,6 +48,7 @@ import {
   Section,
   SegmentedControl,
   StatGrid,
+  useSheetViewport,
 } from "./ui";
 
 type RowState = SetDraft;
@@ -251,6 +255,23 @@ export function AppShell() {
     }
   }
 
+  /** Exercici obert des de Progrés: tornar-hi és un «enrere», com amb els dies de l'historial. */
+  const exerciseFromProgres = useRef(false);
+
+  function openExercise(exercise: { name: string; kind: ExerciseKind }) {
+    exerciseFromProgres.current = true;
+    navigate({ view: "exercici", exercise: { name: exercise.name, kind: exercise.kind } });
+  }
+
+  function backToProgres() {
+    if (route.view === "exercici" && exerciseFromProgres.current) {
+      exerciseFromProgres.current = false;
+      window.history.back();
+    } else {
+      window.location.replace(buildHash({ view: "progres" }));
+    }
+  }
+
   /** Pestanya: com a iOS, tocar la pestanya on ja ets torna a dalt (des d'un dia, torna a la llista). */
   function openTab(view: View) {
     if (route.view === view) scrollToTop();
@@ -274,6 +295,7 @@ export function AppShell() {
   const sheetBodyRef = useRef<HTMLDivElement>(null);
   const [sheetScrolled, setSheetScrolled] = useState(false);
   const sheetTitleRef = useRef<HTMLHeadingElement>(null);
+  useSheetViewport(dialogRef, openedAt !== null);
 
   /** Cada pas (i cada obertura) comença amunt. */
   function showStep(next: "pick" | "sets") {
@@ -291,6 +313,11 @@ export function AppShell() {
     setPrefillDate(null);
     setFormError(null);
     dialogRef.current?.showModal();
+    // En pantalles tàctils no s'obre el teclat sol (com els selectors d'iOS):
+    // el focus va al títol i la cerca s'activa en tocar-la.
+    if (window.matchMedia("(pointer: coarse) and (hover: none)").matches) {
+      sheetTitleRef.current?.focus({ preventScroll: true });
+    }
   }
 
   function requestCloseSheet() {
@@ -358,11 +385,14 @@ export function AppShell() {
     (c) => !recents.some((r) => r.name === c.name && r.kind === c.kind),
   );
   const allOptions = [...recents, ...seedOptions];
-  const query = search.trim().toLowerCase();
-  const matches = (o: { name: string }) => !query || o.name.toLowerCase().includes(query);
+  // Cerca en català, anglès o castellà (àlies del catàleg), sense accents; la llista es mostra en català.
+  const query = normalizeForSearch(search);
+  const matches = (o: { name: string; kind: ExerciseKind }) => matchesExerciseQuery(o, search);
   const recentMatches = recents.filter(matches);
   const seedMatches = seedOptions.filter(matches);
-  const exactMatch = allOptions.some((o) => o.name.toLowerCase() === query);
+  const exactMatch =
+    allOptions.some((o) => normalizeForSearch(o.name) === query) ||
+    CATALOG_SEED.some((c) => c.aliases.some((a) => normalizeForSearch(a) === query));
   const showCreate = query !== "" && !exactMatch;
 
   function optionList(options: { name: string; kind: ExerciseKind }[]) {
@@ -394,6 +424,7 @@ export function AppShell() {
     ? "grid-cols-[minmax(0,1fr)_minmax(0,2fr)_2.75rem]"
     : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem]";
   const tabIsHistorial = route.view === "historial" || route.view === "sessio";
+  const tabIsProgres = route.view === "progres" || route.view === "exercici";
 
   return (
     <>
@@ -419,6 +450,18 @@ export function AppShell() {
             onBack={backToHistorial}
           />
         )}
+        {route.view === "progres" && (
+          <Progress entries={entries} now={now} loaded={loaded} onOpenExercise={openExercise} />
+        )}
+        {route.view === "exercici" && route.exercise && (
+          <ExerciseDetail
+            entries={entries}
+            exercise={route.exercise}
+            now={now}
+            onBack={backToProgres}
+            onOpenDay={(date) => navigate({ view: "sessio", date })}
+          />
+        )}
         {route.view === "ajustos" && <Settings />}
       </main>
 
@@ -435,6 +478,7 @@ export function AppShell() {
         <div className="flex h-[3.875rem] min-w-0 flex-1 items-stretch rounded-full border-[0.5px] border-black/5 bg-surface/80 p-1 shadow-float backdrop-blur-xl backdrop-saturate-150">
           <TabButton active={route.view === "avui"} onClick={() => openTab("avui")} icon={DumbbellIcon} label="Avui" />
           <TabButton active={tabIsHistorial} onClick={() => openTab("historial")} icon={CalendarIcon} label="Historial" />
+          <TabButton active={tabIsProgres} onClick={() => openTab("progres")} icon={ChartIcon} label="Progrés" />
           <TabButton active={route.view === "ajustos"} onClick={() => openTab("ajustos")} icon={GearIcon} label="Ajustos" />
         </div>
         <button
@@ -457,10 +501,10 @@ export function AppShell() {
         onClick={(e) => {
           if (e.target === e.currentTarget && backdropDown.current) requestCloseSheet();
         }}
-        className="sheet m-0 mt-auto h-[92dvh] max-h-[92dvh] w-full max-w-none overflow-hidden rounded-t-[1.75rem] bg-canvas p-0 text-label sm:m-auto sm:h-auto sm:max-h-[85dvh] sm:max-w-md sm:rounded-[1.75rem]"
+        className="sheet w-full max-w-none overflow-hidden rounded-t-[1.75rem] bg-canvas p-0 text-label sm:m-auto sm:h-auto sm:max-h-[85dvh] sm:max-w-md sm:rounded-[1.75rem]"
       >
-        {/* Al mòbil, alçada fixa («large detent»): el full no salta entre passos i «Desa» sempre queda al mateix lloc. */}
-        <div className="flex h-full max-h-[92dvh] flex-col sm:max-h-[85dvh]">
+        {/* Al mòbil, alçada fixa («large detent», vegeu `.sheet`): el full no salta entre passos i «Desa» sempre queda al mateix lloc. */}
+        <div className="flex h-full flex-col sm:max-h-[85dvh]">
           <div aria-hidden="true" className="mx-auto mt-[5px] h-[5px] w-9 shrink-0 rounded-full bg-label-4 sm:hidden" />
 
           <div

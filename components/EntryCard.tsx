@@ -13,13 +13,14 @@ import {
 import { nowMs } from "@/lib/dates";
 import { formatClock, formatClockTimer, formatDuration, formatWeight } from "@/lib/format";
 import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/set-draft";
+import { clearStopwatch, startStopwatch, stopwatchSeconds, useStopwatch } from "@/lib/stopwatch";
 import type { Entry, EntrySet, ExerciseKind } from "@/lib/types";
 import { confirmAction } from "./ConfirmHost";
 import { ExerciseIcon } from "./ExerciseIcon";
-import { CheckIcon, PlusIcon, TrashIcon, WarningIcon, XmarkIcon } from "./icons";
+import { CheckIcon, PlayIcon, PlusIcon, StopIcon, TrashIcon, WarningIcon, XmarkIcon } from "./icons";
 import { Button, CARD, FIELD, IconButton, SET_FIELD } from "./ui";
 
-/** Xip d'estat de la capçalera (cronòmetre en directe o «Inactiu»). */
+/** Xip d'estat de la capçalera (temps des que s'ha començat, «En curs» o «Inactiu»). */
 const CHIP =
   "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-subhead font-semibold tabular-nums";
 
@@ -36,6 +37,10 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
   const isActive = entry.status === "active";
   const stale = isActive && now - entry.updatedAt > STALE_MS;
   const elapsedMs = now - entry.startedAt;
+  // Els exercicis de temps es cronometren sèrie a sèrie (▶ a cada fila).
+  const canTime = isActive && entry.kind === "time";
+  const stopwatch = useStopwatch();
+  const timing = stopwatch?.entryId === entry.id ? stopwatch : null;
 
   function startEditingSet(set: Pick<EntrySet, "id" | "weight" | "reps" | "durationSec">) {
     editingSetRef.current = set.id;
@@ -79,10 +84,37 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
     );
   }
 
+  /** Engega el cronòmetre d'una sèrie; si n'hi havia un altre d'aquest exercici, el desa abans. */
+  async function onStartTiming(setId: string) {
+    if (editingSetRef.current) void commitSet();
+    if (editingSetRef.current) return; // l'edició no és vàlida: se'n mostra l'error
+    await onStopTiming();
+    startStopwatch(entry.id, setId, nowMs());
+  }
+
+  /**
+   * Atura el cronòmetre i desa la durada a la sèrie (el pes no es toca). Si
+   * al final hi ha algun decalatge, la sèrie es pot editar com qualsevol altra.
+   */
+  async function onStopTiming() {
+    if (!timing) return;
+    const seconds = stopwatchSeconds(timing, nowMs());
+    clearStopwatch();
+    if (seconds < 1 || !entry.sets.some((s) => s.id === timing.setId)) return;
+    await updateSet(entry.id, timing.setId, { durationSec: seconds }, nowMs());
+  }
+
+  /** Sense cap sèrie encara: en crea una de buida i la cronometra. */
+  async function onTimeNewSet() {
+    const created = await duplicateLastSet(entry.id, nowMs());
+    if (created) await onStartTiming(created.id);
+  }
+
   async function onFinish() {
     if (finishing) return;
     setFinishing(true);
     try {
+      await onStopTiming();
       await finishEntry(entry.id, nowMs());
     } finally {
       setFinishing(false);
@@ -100,6 +132,7 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
 
   async function onRemoveSet(setId: string) {
     if (!(await confirmAction({ title: "Esborrar aquesta sèrie?", confirmLabel: "Esborra", destructive: true }))) return;
+    if (timing?.setId === setId) clearStopwatch();
     await removeSet(entry.id, setId, nowMs());
   }
 
@@ -111,6 +144,7 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
       destructive: true,
     });
     if (!ok) return;
+    if (timing) clearStopwatch();
     await deleteEntry(entry.id);
   }
 
@@ -183,8 +217,15 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
                 ) : (
                   <span className={`${CHIP} ${chipOffset} bg-live/15 text-live-ink`}>
                     <span aria-hidden="true" className="size-1.75 animate-live rounded-full bg-live" />
-                    <span className="sr-only">En curs: </span>
-                    {formatClockTimer(elapsedMs / 1000)}
+                    {entry.kind === "time" ? (
+                      // Un rellotge aquí semblaria el de la sèrie: el cronòmetre és a cada fila.
+                      "En curs"
+                    ) : (
+                      <>
+                        <span className="sr-only">En curs: </span>
+                        {formatClockTimer(elapsedMs / 1000)}
+                      </>
+                    )}
                   </span>
                 ))}
             </div>
@@ -225,6 +266,25 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
                   onCommit={() => void commitSet()}
                   onCancel={stopEditingSet}
                 />
+              ) : timing?.setId === set.id ? (
+                <span className="cell flex min-h-11 min-w-0 flex-1 items-center gap-2">
+                  <span
+                    role="timer"
+                    aria-label={`Cronòmetre de la sèrie ${i + 1}`}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-body"
+                  >
+                    <span aria-hidden="true" className="size-1.75 animate-live rounded-full bg-live" />
+                    <span className="font-semibold text-live-ink tabular-nums">
+                      {formatClockTimer(stopwatchSeconds(timing, now))}
+                    </span>
+                  </span>
+                  <IconButton variant="ghost" label="Atura i desa el temps" onClick={() => void onStopTiming()}>
+                    <StopIcon size={20} className="text-live-ink" />
+                  </IconButton>
+                  <IconButton variant="ghost" label="Cancel·la el cronòmetre" onClick={clearStopwatch}>
+                    <XmarkIcon size={16} strokeWidth={2.2} />
+                  </IconButton>
+                </span>
               ) : (
                 <span className="cell flex min-h-11 min-w-0 flex-1 items-center gap-2">
                   <button
@@ -235,6 +295,15 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
                     <span className="sr-only">Edita la sèrie {i + 1}: </span>
                     <SetValue set={set} kind={entry.kind} />
                   </button>
+                  {canTime && (
+                    <IconButton
+                      variant="ghost"
+                      label={`Cronometra la sèrie ${i + 1}`}
+                      onClick={() => void onStartTiming(set.id)}
+                    >
+                      <PlayIcon size={18} />
+                    </IconButton>
+                  )}
                   <IconButton
                     variant="ghost"
                     label="Esborra la sèrie"
@@ -248,7 +317,15 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
           ))}
         </ol>
       ) : (
-        <p className="flex min-h-11 items-center px-4 text-subhead text-label-2">Cap sèrie encara.</p>
+        <div className="flex min-h-11 items-center justify-between gap-2 px-4">
+          <p className="text-subhead text-label-2">Cap sèrie encara.</p>
+          {canTime && (
+            <Button variant="secondary" size="sm" onClick={() => void onTimeNewSet()} className="pl-3">
+              <PlayIcon size={14} />
+              Cronometra
+            </Button>
+          )}
+        </div>
       )}
 
       <footer className="flex items-center gap-2 border-t-[0.5px] border-separator py-3 pl-4">

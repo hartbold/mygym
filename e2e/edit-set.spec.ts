@@ -129,3 +129,36 @@ test("la durada d'un exercici de temps es pot corregir un cop fet", async ({ pag
   await page.reload();
   await expect(set).toContainText("15:30");
 });
+
+test("una sèrie de temps es cronometra, el temps es desa i després es pot ajustar", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  await createEntry(page, "Planxa", async (p) => {
+    await p.getByPlaceholder("min").nth(0).fill("1");
+    await p.getByPlaceholder("s").nth(0).fill("0");
+  });
+
+  const card = page.locator("article", { hasText: "Planxa" });
+  // A dalt ja no hi ha cap rellotge que es pugui confondre amb el de la sèrie.
+  await expect(card.getByText("En curs", { exact: true })).toBeVisible();
+
+  await card.getByRole("button", { name: "Cronometra la sèrie 1" }).click();
+  await page.clock.fastForward(45_000);
+  await expect(card.getByRole("timer", { name: "Cronòmetre de la sèrie 1" })).toContainText(/0:4[5-7]/);
+
+  // Sobreviu a una recàrrega (p. ex. el sistema descarta l'app amb el mòbil bloquejat).
+  await page.reload();
+  await page.clock.fastForward(7_000);
+  // El rellotge simulat avança també amb el temps real entre passos: ±2 s.
+  await expect(card.getByRole("timer")).toContainText(/0:5[2-4]/);
+
+  await card.getByRole("button", { name: "Atura i desa el temps" }).click();
+  const set = card.getByRole("button", { name: /^Edita la sèrie 1:/ });
+  await expect(set).toContainText(/0:5[2-6]/);
+
+  // Ajust manual del decalatge.
+  await set.click();
+  await card.getByRole("textbox", { name: "Segons, sèrie 1" }).fill("50");
+  await card.getByRole("button", { name: "Fet" }).click();
+  await expect(set).toContainText("0:50");
+});

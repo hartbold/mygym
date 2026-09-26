@@ -22,7 +22,13 @@ export const metadata: Metadata = {
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    // iOS no fa servir les icones del manifest a la pantalla d'inici: només aquestes
+    // (i, si no les pot baixar, prova /apple-touch-icon.png a l'arrel i si no, posa la inicial).
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/icons/apple-touch-icon-167.png", sizes: "167x167", type: "image/png" },
+      { url: "/icons/apple-touch-icon-152.png", sizes: "152x152", type: "image/png" },
+    ],
   },
 };
 

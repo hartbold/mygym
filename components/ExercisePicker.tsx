@@ -13,6 +13,7 @@ import {
 } from "@/lib/catalog-seed";
 import { recentExercises } from "@/lib/sessions";
 import type { Entry, ExerciseKind } from "@/lib/types";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { XmarkIcon } from "./icons";
 import { Button, CARD, IconButton, List, ListItem, SearchField, Section, SegmentedControl, useSheetViewport } from "./ui";
 
@@ -54,6 +55,7 @@ export function ExercisePicker({
           return (
             <ListItem
               key={`${o.name} ${o.kind}`}
+              leading={<ExerciseIcon exercise={o} />}
               title={o.name}
               subtitle={c && <CatalogDetails exercise={c} />}
               ariaLabel={o.name}

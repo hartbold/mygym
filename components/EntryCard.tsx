@@ -15,6 +15,7 @@ import { formatClock, formatClockTimer, formatDuration, formatWeight } from "@/l
 import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/set-draft";
 import type { Entry, EntrySet, ExerciseKind } from "@/lib/types";
 import { confirmAction } from "./ConfirmHost";
+import { ExerciseIcon } from "./ExerciseIcon";
 import { CheckIcon, PlusIcon, TrashIcon, WarningIcon, XmarkIcon } from "./icons";
 import { Button, CARD, FIELD, IconButton, SET_FIELD } from "./ui";
 
@@ -138,57 +139,62 @@ export function EntryCard({ entry, now }: { entry: Entry; now: number }) {
         {/* El botó del nom es diu «Edita el nom»; el títol dona nom a la targeta per als lectors de pantalla. */}
         <h3 className="sr-only">{entry.name}</h3>
         <div className="flex items-start gap-3">
+          <ExerciseIcon exercise={entry} />
           <div className="min-w-0 flex-1">
-            {editingName ? (
-              <input
-                autoFocus
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                onBlur={commitName}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                  if (e.key === "Escape") {
-                    setDraftName(entry.name);
-                    setEditingName(false);
-                  }
-                }}
-                aria-label="Nom de l'exercici"
-                autoComplete="off"
-                enterKeyHint="done"
-                className={`${FIELD} font-semibold`}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEditingName(true)}
-                // Zona tàctil de 46px sense moure res (el marge negatiu compensa el farciment);
-                // `relative` la posa per sobre de la línia de sota perquè no li prengui els tocs.
-                className="relative -my-3 max-w-full rounded-md py-3 text-left text-headline text-pretty break-words transition-opacity duration-150 active:opacity-50"
-                aria-label="Edita el nom"
-              >
-                {entry.name}
-              </button>
-            )}
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                {editingName ? (
+                  <input
+                    autoFocus
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onBlur={commitName}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      if (e.key === "Escape") {
+                        setDraftName(entry.name);
+                        setEditingName(false);
+                      }
+                    }}
+                    aria-label="Nom de l'exercici"
+                    autoComplete="off"
+                    enterKeyHint="done"
+                    className={`${FIELD} font-semibold`}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingName(true)}
+                    // Zona tàctil de 46px sense moure res (el marge negatiu compensa el farciment);
+                    // `relative` la posa per sobre de la línia de sota perquè no li prengui els tocs.
+                    className="relative -my-3 max-w-full rounded-md py-3 text-left text-headline text-pretty break-words transition-opacity duration-150 active:opacity-50"
+                    aria-label="Edita el nom"
+                  >
+                    {entry.name}
+                  </button>
+                )}
+              </div>
+              {isActive &&
+                (stale ? (
+                  <span className={`${CHIP} ${chipOffset} bg-fill-3 text-label-2`}>
+                    <span aria-hidden="true" className="size-1.75 rounded-full bg-label-3" />
+                    Inactiu
+                  </span>
+                ) : (
+                  <span className={`${CHIP} ${chipOffset} bg-live/15 text-live-ink`}>
+                    <span aria-hidden="true" className="size-1.75 animate-live rounded-full bg-live" />
+                    <span className="sr-only">En curs: </span>
+                    {formatClockTimer(elapsedMs / 1000)}
+                  </span>
+                ))}
+            </div>
+            <p
+              className={`${editingName ? "mt-1.5" : "mt-0.5"} text-subhead text-pretty text-label-2 tabular-nums`}
+            >
+              {meta.join(" · ")}
+            </p>
           </div>
-          {isActive &&
-            (stale ? (
-              <span className={`${CHIP} ${chipOffset} bg-fill-3 text-label-2`}>
-                <span aria-hidden="true" className="size-1.75 rounded-full bg-label-3" />
-                Inactiu
-              </span>
-            ) : (
-              <span className={`${CHIP} ${chipOffset} bg-live/15 text-live-ink`}>
-                <span aria-hidden="true" className="size-1.75 animate-live rounded-full bg-live" />
-                <span className="sr-only">En curs: </span>
-                {formatClockTimer(elapsedMs / 1000)}
-              </span>
-            ))}
         </div>
-        <p
-          className={`${editingName ? "mt-1.5" : "mt-0.5"} text-subhead text-pretty text-label-2 tabular-nums`}
-        >
-          {meta.join(" · ")}
-        </p>
       </header>
 
       {entry.sets.length > 0 ? (

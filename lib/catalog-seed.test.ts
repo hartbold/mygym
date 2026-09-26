@@ -10,6 +10,7 @@ import {
   otherLanguageNames,
   TERMCAT_TO_GYM_NAMES,
 } from "./catalog-seed";
+import { EXERCISE_ICON_BY_NAME, EXERCISE_ICON_SVGS } from "./exercise-icons.generated";
 
 const search = (q: string) => CATALOG_SEED.filter((c) => matchesExerciseQuery(c, q)).map((c) => c.name);
 
@@ -25,6 +26,12 @@ describe("catàleg", () => {
   it("la documentació d'importació llista tots els exercicis amb el seu tipus", () => {
     const docs = readFileSync(new URL("../docs/importacio.md", import.meta.url), "utf8");
     for (const c of CATALOG_SEED) expect(docs).toContain(`| ${c.name} | \`${c.kind}\` | ${c.es} | ${c.en} |`);
+  });
+
+  it("cada exercici del catàleg té icona (i cap icona apunta a un nom que ja no existeix)", () => {
+    const names = CATALOG_SEED.map((c) => c.name).sort();
+    expect(Object.keys(EXERCISE_ICON_BY_NAME).sort()).toEqual(names);
+    for (const key of Object.values(EXERCISE_ICON_BY_NAME)) expect(EXERCISE_ICON_SVGS[key]).toBeTruthy();
   });
 
   it("els noms actuals no es reanomenen", () => {

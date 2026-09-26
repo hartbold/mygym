@@ -425,7 +425,7 @@ export function muscleVolume(entries: Entry[], now: number): MuscleLoad[] {
 // --- Cos ------------------------------------------------------------------
 
 /** Exercicis de referència per a la força relativa, per ordre de preferència. */
-const MAIN_LIFTS = ["Pressió sobre banc", "Esquat", "Pes mort", "Pressió d'espatlles"];
+const MAIN_LIFTS = ["Press de banca", "Esquat", "Pes mort", "Press d'espatlles"];
 
 export interface BodyStats {
   current?: BodyWeight;

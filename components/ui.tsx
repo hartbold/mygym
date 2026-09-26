@@ -199,7 +199,8 @@ export function List({ children, className = "" }: { children: ReactNode; classN
 
 /**
  * Fila d'una `List`. Amb `onClick` és un botó sencer. `ariaLabel` fixa el
- * nom accessible quan el text visible inclou detalls secundaris.
+ * nom accessible quan el text visible inclou detalls secundaris. `accessory`
+ * va a la dreta, fora del botó (p. ex. un enllaç d'ajuda).
  */
 export function ListItem({
   title,
@@ -210,6 +211,7 @@ export function ListItem({
   onClick,
   ariaLabel,
   titleClassName = "",
+  accessory,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
@@ -219,6 +221,7 @@ export function ListItem({
   onClick?: () => void;
   ariaLabel?: string;
   titleClassName?: string;
+  accessory?: ReactNode;
 }) {
   const content = (
     <>
@@ -234,20 +237,22 @@ export function ListItem({
     </>
   );
   return (
-    <li>
+    <li className={accessory ? "flex" : undefined}>
       {onClick ? (
         // Anell de focus a dins i arrodonit com la llista: `List` és overflow-hidden.
         <button
           type="button"
           onClick={onClick}
           aria-label={ariaLabel}
-          className="flex w-full items-stretch pl-4 text-left transition-colors duration-150 focus-visible:-outline-offset-2 focus-visible:rounded-2xl active:bg-fill-4"
+          className="flex w-full min-w-0 items-stretch pl-4 text-left transition-colors duration-150 focus-visible:-outline-offset-2 focus-visible:rounded-2xl active:bg-fill-4"
         >
           {content}
         </button>
       ) : (
-        <div className="flex items-stretch pl-4">{content}</div>
+        <div className="flex min-w-0 flex-1 items-stretch pl-4">{content}</div>
       )}
+      {/* `cell` perquè el separador de la fila continuï per sota. */}
+      {accessory && <span className="cell flex shrink-0 items-center pr-2">{accessory}</span>}
     </li>
   );
 }

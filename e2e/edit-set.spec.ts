@@ -16,12 +16,12 @@ test("les sèries de la targeta es poden editar: «+ Sèrie» obre la nova en ed
   page,
 }) => {
   await page.goto("/");
-  await createEntry(page, "Pressió sobre banc", async (p) => {
+  await createEntry(page, "Press de banca", async (p) => {
     await p.getByPlaceholder("kg").nth(0).fill("60");
     await p.getByPlaceholder("reps").nth(0).fill("10");
   });
 
-  const card = page.locator("article", { hasText: "Pressió sobre banc" });
+  const card = page.locator("article", { hasText: "Press de banca" });
   const set = (n: number) => card.getByRole("button", { name: new RegExp(`^Edita la sèrie ${n}:`) });
 
   // «+ Sèrie» copia l'última i la deixa en edició per ajustar pes i reps.
@@ -75,34 +75,35 @@ test("les sèries de la targeta es poden editar: «+ Sèrie» obre la nova en ed
   await expect(set(3)).toContainText("62,5 kg × 6 reps");
 });
 
-test("el selector es pot cercar en anglès i castellà, però només mostra noms en català", async ({ page }) => {
+test("el selector es pot cercar en anglès i castellà i mostra en petit aquests noms i els músculs", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Nou exercici", exact: true }).click();
   const search = page.getByRole("searchbox", { name: "Cerca un exercici" });
   const dialog = page.getByRole("dialog");
 
-  for (const [query, catalan] of [
-    ["deadlift", "Pes mort"],
-    ["peso muerto", "Pes mort"],
-    ["plancha", "Planxa amb quatre suports"],
-    ["bench press", "Pressió sobre banc"],
-    ["lat pulldown", "Tracció a la politja alta"],
-    ["jalon al pecho", "Tracció a la politja alta"],
+  for (const [query, catalan, others] of [
+    ["deadlift", "Pes mort", "Peso muerto · Deadlift"],
+    ["peso muerto", "Pes mort", "Peso muerto · Deadlift"],
+    ["plancha", "Planxa", "Plancha · Plank"],
+    ["bench press", "Press de banca", "Bench press"],
+    ["lat pulldown", "Estirada al pit", "Jalón al pecho · Lat pulldown"],
+    ["jalon al pecho", "Estirada al pit", "Jalón al pecho · Lat pulldown"],
   ]) {
     await search.fill(query);
-    await expect(dialog.getByRole("button", { name: catalan, exact: true })).toBeVisible();
-    await expect(dialog.getByText(query, { exact: true })).toHaveCount(0);
+    const option = dialog.getByRole("button", { name: catalan, exact: true });
+    await expect(option).toBeVisible();
+    await expect(option).toContainText(others);
     // Un àlies conegut sencer no proposa crear un exercici nou.
     await expect(dialog.getByRole("button", { name: "Crea i continua" })).toHaveCount(0);
   }
   // Una part d'un àlies també troba l'exercici, i es pot cercar per màquina i grup muscular.
   await search.fill("bench");
-  await expect(dialog.getByRole("button", { name: "Pressió sobre banc", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Press de banca", exact: true })).toContainText("PectoralTrícepsDeltoides");
   await search.fill("maquina pecho");
-  await expect(dialog.getByRole("button", { name: "Papallona", exact: true })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Pressió de pit", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Contractora de pit", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Press de pit a la màquina", exact: true })).toBeVisible();
   await search.fill("curl leg");
-  await expect(dialog.getByRole("button", { name: "Rull de cames", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Curl femoral", exact: true })).toBeVisible();
 });
 
 test("la durada d'un exercici de temps es pot corregir un cop fet", async ({ page }) => {

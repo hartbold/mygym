@@ -44,14 +44,14 @@ test("l'app shell i les dades funcionen fora de línia després de la primera vi
 
   // Registrar un exercici sense xarxa (tot és local, IndexedDB).
   await page.getByRole("button", { name: "Nou exercici", exact: true }).click();
-  await page.getByRole("button", { name: "Planxa amb quatre suports", exact: true }).click();
+  await page.getByRole("button", { name: "Planxa", exact: true }).click();
   await page.getByPlaceholder("min").first().fill("1");
   await page.getByPlaceholder("s").first().fill("0");
   await page.getByRole("button", { name: "Esborra la fila" }).last().click();
   await page.getByRole("button", { name: "Esborra la fila" }).last().click();
   await page.getByRole("button", { name: "Desa" }).click();
 
-  await expect(page.locator("article", { hasText: "Planxa amb quatre suports" })).toBeVisible();
+  await expect(page.locator("article", { hasText: "Planxa" })).toBeVisible();
 
   await context.setOffline(false);
 });

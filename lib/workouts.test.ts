@@ -30,8 +30,8 @@ async function setup() {
     {
       name: "Empenta",
       exercises: [
-        { name: "Pressió sobre banc", kind: "reps", sets: [{ weight: 60, reps: 8 }, { weight: 60, reps: 8 }] },
-        { name: "Planxa amb quatre suports", kind: "time", sets: [{ durationSec: 60 }] },
+        { name: "Press de banca", kind: "reps", sets: [{ weight: 60, reps: 8 }, { weight: 60, reps: 8 }] },
+        { name: "Planxa", kind: "time", sets: [{ durationSec: 60 }] },
       ],
     },
     T0 - 60 * MIN,
@@ -58,7 +58,7 @@ describe("sessió guiada", () => {
     expect(w.startedAt).toBe(T0 + 5 * MIN);
     const [entry] = await db.entries.toArray();
     expect(entry).toMatchObject({
-      name: "Pressió sobre banc",
+      name: "Press de banca",
       kind: "reps",
       status: "done",
       date: "2026-09-24",
@@ -75,8 +75,8 @@ describe("sessió guiada", () => {
     await toggleSetDone(workoutId, press.id, press.sets[1].id, T0 + 8 * MIN);
     await toggleSetDone(workoutId, plank.id, plank.sets[0].id, T0 + 15 * MIN);
     const entries = await db.entries.toArray();
-    const pressEntry = entries.find((e) => e.name === "Pressió sobre banc")!;
-    const plankEntry = entries.find((e) => e.name === "Planxa amb quatre suports")!;
+    const pressEntry = entries.find((e) => e.name === "Press de banca")!;
+    const plankEntry = entries.find((e) => e.name === "Planxa")!;
     expect([pressEntry.startedAt, pressEntry.endedAt]).toEqual([T0 + 5 * MIN, T0 + 8 * MIN]);
     expect([plankEntry.startedAt, plankEntry.endedAt]).toEqual([T0 + 8 * MIN, T0 + 15 * MIN]);
     // La sessió de l'historial dura de la primera a l'última marca.
@@ -121,10 +121,10 @@ describe("sessió guiada", () => {
   it("afegir, treure i moure sèries i exercicis", async () => {
     const { workoutId, press, plank } = await setup();
     await addWorkoutSet(workoutId, press.id, T0);
-    await addWorkoutExercise(workoutId, { name: "Dominació", kind: "reps", sets: [{ reps: 8 }] }, T0);
+    await addWorkoutExercise(workoutId, { name: "Dominades", kind: "reps", sets: [{ reps: 8 }] }, T0);
     await moveWorkoutExercise(workoutId, plank.id, 1, T0);
     let w = (await db.workouts.get(workoutId))!;
-    expect(w.exercises.map((e) => e.name)).toEqual(["Pressió sobre banc", "Dominació", "Planxa amb quatre suports"]);
+    expect(w.exercises.map((e) => e.name)).toEqual(["Press de banca", "Dominades", "Planxa"]);
     expect(w.exercises[0].sets).toHaveLength(3);
     expect(w.exercises[0].sets[2]).toMatchObject({ weight: 60, reps: 8 });
 
@@ -136,7 +136,7 @@ describe("sessió guiada", () => {
 
     await removeWorkoutExercise(workoutId, plank.id, T0);
     w = (await db.workouts.get(workoutId))!;
-    expect(w.exercises.map((e) => e.name)).toEqual(["Pressió sobre banc", "Dominació"]);
+    expect(w.exercises.map((e) => e.name)).toEqual(["Press de banca", "Dominades"]);
   });
 
   it("acabar esborra el pla i, si es demana, actualitza la plantilla amb els valors d'avui", async () => {
@@ -194,7 +194,7 @@ describe("plantilles", () => {
         sets: [{ id: "s", weight: 100, reps: 5, doneAt: 3 }],
         updatedAt: 3,
       },
-      { id: "e1", name: "Planxa amb quatre suports", kind: "time", date: "2026-09-22", startedAt: 1, status: "done", sets: [], updatedAt: 1 },
+      { id: "e1", name: "Planxa", kind: "time", date: "2026-09-22", startedAt: 1, status: "done", sets: [], updatedAt: 1 },
     ]);
     expect(input.exercises).toEqual([{ name: "Esquat", kind: "reps", sets: [{ weight: 100, reps: 5 }] }]);
   });
@@ -224,8 +224,8 @@ describe("importar i exportar plantilles", () => {
       ]),
     );
     expect(parsed.ok && parsed.value[0].exercises).toEqual([
-      { name: "Planxa amb quatre suports", kind: "time", sets: [{ durationSec: 45 }] },
-      { name: "Pressió sobre banc", kind: "reps", sets: [{ weight: 50, reps: 10 }] },
+      { name: "Planxa", kind: "time", sets: [{ durationSec: 45 }] },
+      { name: "Press de banca", kind: "reps", sets: [{ weight: 50, reps: 10 }] },
       { name: "Salts a la caixa", kind: "reps", sets: [{ reps: 10 }] },
     ]);
   });

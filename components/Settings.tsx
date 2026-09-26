@@ -11,7 +11,17 @@ import { db } from "@/lib/db";
 import { localDateKey, nowMs, parseDecimal } from "@/lib/dates";
 import { formatDayMonth } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
-import { CheckIcon, ExportIcon, ImportIcon, InstallIcon, PlusIcon, RulerIcon, StorageIcon, WarningIcon } from "./icons";
+import {
+  CheckIcon,
+  ExportIcon,
+  ImportIcon,
+  InstallIcon,
+  PlusIcon,
+  QuestionIcon,
+  RulerIcon,
+  StorageIcon,
+  WarningIcon,
+} from "./icons";
 import { templateSummary } from "./TemplateSheet";
 import { List, ListItem, NavHeader, Page, Section } from "./ui";
 
@@ -84,6 +94,25 @@ function LastBackupNote({ at }: { at: number | null }) {
 }
 
 const TILE_ICON = { size: 18, strokeWidth: 2 } as const;
+
+/** Documentació dels camps dels fitxers d'importació (`docs/importacio.md` del repositori). */
+const IMPORT_DOCS_URL = "https://raw.githubusercontent.com/hartbold/mygym/main/docs/importacio.md";
+
+/** Enllaç «?» al costat d'un botó d'importar, cap a la documentació del format. */
+function ImportDocsLink({ label }: { label: string }) {
+  return (
+    <a
+      href={IMPORT_DOCS_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      title={label}
+      className="grid size-11 place-items-center rounded-full text-accent transition-opacity duration-150 focus-visible:-outline-offset-2 active:opacity-50"
+    >
+      <QuestionIcon size={22} strokeWidth={1.8} />
+    </a>
+  );
+}
 
 export function Settings({ onOpenTemplate }: { onOpenTemplate: (id: string) => void }) {
   const [status, setStatus] = useState<Status | null>(null);
@@ -231,6 +260,7 @@ export function Settings({ onOpenTemplate }: { onOpenTemplate: (id: string) => v
                 </IconTile>
               }
               title="Importa una còpia"
+              accessory={<ImportDocsLink label="Documentació: quins camps ha de tenir una còpia" />}
             />
           </List>
           <input
@@ -530,6 +560,7 @@ function TemplatesSection({ onOpenTemplate }: { onOpenTemplate: (id: string) => 
               }
               title="Importa plantilles"
               onClick={() => fileRef.current?.click()}
+              accessory={<ImportDocsLink label="Documentació: quins camps ha de tenir un fitxer de plantilles" />}
             />
             {sorted.length > 0 && (
               <ListItem

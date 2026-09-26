@@ -26,19 +26,27 @@ async function seed(page: Page) {
       };
     };
     const entries = [
-      entry("Pressió sobre banc", 30, 80),
-      entry("Pressió sobre banc", 23, 82.5),
-      entry("Pressió sobre banc", 16, 85),
-      entry("Pressió sobre banc", 9, 77.5),
-      entry("Pressió sobre banc", 2, 80),
+      entry("Press de banca", 30, 80),
+      entry("Press de banca", 23, 82.5),
+      entry("Press de banca", 16, 85),
+      entry("Press de banca", 9, 77.5),
+      entry("Press de banca", 2, 80),
       entry("Esquat", 10, 100),
       entry("Esquat", 1, 105),
     ];
-    const db = await new Promise<IDBDatabase>((res, rej) => {
-      const r = indexedDB.open("mygym");
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => rej(r.error);
-    });
+    // La BD pot aparèixer abans que Dexie hi creï les taules: es reintenta
+    // (tancant de seguida perquè la nostra connexió no li bloquegi l'upgrade).
+    let db: IDBDatabase;
+    for (;;) {
+      db = await new Promise<IDBDatabase>((res, rej) => {
+        const r = indexedDB.open("mygym");
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+      if (db.objectStoreNames.contains("entries")) break;
+      db.close();
+      await new Promise((r) => setTimeout(r, 50));
+    }
     await new Promise((res, rej) => {
       const tx = db.transaction("entries", "readwrite");
       for (const e of entries) tx.objectStore("entries").put(e);
@@ -66,7 +74,7 @@ test("Progrés mostra rècords, baixades, el detall d'un exercici i el pes corpo
   await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Progrés");
   await page.goBack();
   await expect(page.getByRole("heading", { level: 1, name: "Progrés" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Baixada a Pressió sobre banc/ })).toContainText("80 kg, abans 85 kg");
+  await expect(page.getByRole("button", { name: /^Baixada a Press de banca/ })).toContainText("80 kg, abans 85 kg");
 
   // Detall de l'exercici: gràfica amb el resum en text.
   await page.getByRole("button", { name: /^Esquat / }).last().click();

@@ -28,419 +28,651 @@ const MUSCLE_ALIASES: Record<MuscleGroup, string[]> = {
   cardio: ["cardio", "aerobic", "aerobico", "resistencia", "endurance"],
 };
 
+/** Músculs concrets que treballa cada exercici (etiquetes de la llista). */
+export type Muscle =
+  | "pectoral"
+  | "dorsal"
+  | "trapezi"
+  | "lumbars"
+  | "deltoides"
+  | "biceps"
+  | "triceps"
+  | "avantbrac"
+  | "quadriceps"
+  | "isquios"
+  | "glutis"
+  | "bessons"
+  | "adductors"
+  | "abductors"
+  | "abdominals"
+  | "oblics"
+  | "cardio";
+
+/** Nom de cada múscul en català (el que es mostra), castellà i anglès (per a la cerca). */
+export const MUSCLE_NAMES: Record<Muscle, { ca: string; es: string; en: string }> = {
+  pectoral: { ca: "Pectoral", es: "Pectoral", en: "Chest" },
+  dorsal: { ca: "Dorsal", es: "Dorsal", en: "Lats" },
+  trapezi: { ca: "Trapezi", es: "Trapecio", en: "Traps" },
+  lumbars: { ca: "Lumbars", es: "Lumbares", en: "Lower back" },
+  deltoides: { ca: "Deltoides", es: "Deltoides", en: "Delts" },
+  biceps: { ca: "Bíceps", es: "Bíceps", en: "Biceps" },
+  triceps: { ca: "Tríceps", es: "Tríceps", en: "Triceps" },
+  avantbrac: { ca: "Avantbraç", es: "Antebrazo", en: "Forearms" },
+  quadriceps: { ca: "Quàdriceps", es: "Cuádriceps", en: "Quads" },
+  isquios: { ca: "Isquiotibials", es: "Isquiotibiales", en: "Hamstrings" },
+  glutis: { ca: "Glutis", es: "Glúteos", en: "Glutes" },
+  bessons: { ca: "Bessons", es: "Gemelos", en: "Calves" },
+  adductors: { ca: "Adductors", es: "Aductores", en: "Adductors" },
+  abductors: { ca: "Abductors", es: "Abductores", en: "Abductors" },
+  abdominals: { ca: "Abdominals", es: "Abdominales", en: "Abs" },
+  oblics: { ca: "Oblics", es: "Oblicuos", en: "Obliques" },
+  cardio: { ca: "Cardio", es: "Cardio", en: "Cardio" },
+};
+
 export interface CatalogExercise {
+  /** Nom en català, el que es desa i es mostra a tot arreu. */
   name: string;
+  /** Nom habitual en castellà i en anglès: es mostren en petit al cercador. */
+  es: string;
+  en: string;
   kind: ExerciseKind;
   muscle: MuscleGroup;
-  /**
-   * Noms en castellà i anglès, variants habituals i material (màquina,
-   * politja, manuelles…) per a la cerca. Mai es mostren: la llista sempre
-   * surt en català.
-   */
+  /** Músculs que treballa, el principal primer. */
+  muscles: Muscle[];
+  /** Altres variants i material (màquina, politja, manuelles…) només per a la cerca. */
   aliases: string[];
 }
 
 /**
  * Catàleg inicial (constant, mai una taula Dexie — vegeu §Model de dades del
- * pla). Els noms segueixen el TERMCAT (Diccionari de ciències de l'esport i
- * de l'exercici físic, via Cercaterm); els pocs que no hi són segueixen el
- * mateix patró. El desplegable de l'exercici mostra aquesta llista unida als
- * noms ja usats a `entries`.
+ * pla). Els noms són els que se senten al gimnàs (press, curl, crunch…) i no
+ * els del TERMCAT, que costava reconèixer; el castellà i l'anglès es mostren
+ * a sota. El desplegable de l'exercici mostra aquesta llista unida als noms ja
+ * usats a `entries`.
  */
 export const CATALOG_SEED: CatalogExercise[] = [
   // Pit
   {
-    name: "Pressió sobre banc",
+    name: "Press de banca",
+    es: "Press de banca",
+    en: "Bench press",
     kind: "reps",
     muscle: "pit",
-    aliases: ["bench press", "flat bench press", "press de banca", "press banca", "press plano", "press de banca horizontal", "barra", "barbell"],
+    muscles: ["pectoral", "triceps", "deltoides"],
+    aliases: ["flat bench press", "press banca", "press plano", "press de banca horizontal", "barra", "barbell", "pressio sobre banc"],
   },
   {
-    name: "Pressió sobre banc inclinat",
+    name: "Press inclinat",
+    es: "Press inclinado",
+    en: "Incline bench press",
     kind: "reps",
     muscle: "pit",
-    aliases: ["incline bench press", "incline dumbbell press", "press de banca inclinado", "press inclinado", "press inclinado con mancuernas", "manuelles", "mancuernas", "dumbbells"],
+    muscles: ["pectoral", "deltoides", "triceps"],
+    aliases: ["incline dumbbell press", "press de banca inclinado", "press inclinado con mancuernas", "manuelles", "mancuernas", "dumbbells"],
   },
   {
-    name: "Pressió sobre banc declinat",
+    name: "Press declinat",
+    es: "Press declinado",
+    en: "Decline bench press",
     kind: "reps",
     muscle: "pit",
-    aliases: ["decline bench press", "press de banca declinado", "press declinado"],
+    muscles: ["pectoral", "triceps"],
+    aliases: ["press de banca declinado"],
   },
   {
-    name: "Pressió de pit",
+    name: "Press de pit a la màquina",
+    es: "Press de pecho en máquina",
+    en: "Chest press machine",
     kind: "reps",
     muscle: "pit",
-    aliases: ["chest press", "chest press machine", "press de pecho", "press de pecho en maquina", "maquina", "machine"],
+    muscles: ["pectoral", "triceps", "deltoides"],
+    aliases: ["chest press", "press de pecho", "maquina", "machine"],
   },
   {
-    name: "Obertura",
+    name: "Obertures amb manuelles",
+    es: "Aperturas con mancuernas",
+    en: "Dumbbell fly",
     kind: "reps",
     muscle: "pit",
-    aliases: ["chest fly", "dumbbell fly", "flyes", "apertura", "aperturas", "aperturas con mancuernas", "obertures", "manuelles", "mancuernas"],
+    muscles: ["pectoral"],
+    aliases: ["chest fly", "flyes", "apertura", "aperturas", "obertura", "manuelles", "mancuernas"],
   },
   {
-    name: "Obertura a la politja",
+    name: "Creuament de politges",
+    es: "Cruce de poleas",
+    en: "Cable crossover",
     kind: "reps",
     muscle: "pit",
-    aliases: ["cable fly", "cable crossover", "crossover", "cruce de poleas", "aperturas en polea", "polea", "cable", "encreuament"],
+    muscles: ["pectoral"],
+    aliases: ["cable fly", "crossover", "aperturas en polea", "polea", "cable", "politja", "encreuament"],
   },
   {
-    name: "Papallona",
+    name: "Contractora de pit",
+    es: "Contractora (mariposa)",
+    en: "Pec deck",
     kind: "reps",
     muscle: "pit",
-    aliases: ["pec deck", "peck deck", "butterfly", "mariposa", "contractora", "maquina de pectoral", "maquina", "machine"],
+    muscles: ["pectoral"],
+    aliases: ["peck deck", "butterfly", "mariposa", "papallona", "maquina de pectoral", "maquina", "machine"],
   },
   {
     name: "Fons a les paral·leles",
+    es: "Fondos en paralelas",
+    en: "Dips",
     kind: "reps",
     muscle: "pit",
-    aliases: ["dips", "chest dips", "fondos", "fondos en paralelas", "paralelas", "parallel bars"],
+    muscles: ["pectoral", "triceps", "deltoides"],
+    aliases: ["chest dips", "fondos", "paralelas", "parallel bars"],
   },
   {
-    name: "Fons a terra",
+    name: "Flexions",
+    es: "Flexiones",
+    en: "Push-ups",
     kind: "reps",
     muscle: "pit",
-    aliases: ["push up", "push-ups", "pushups", "flexiones", "flexiones de brazos", "flexions", "lagartijas"],
+    muscles: ["pectoral", "triceps", "deltoides"],
+    aliases: ["push up", "pushups", "flexiones de brazos", "fons a terra", "lagartijas"],
   },
   // Esquena
   {
-    name: "Dominació",
+    name: "Dominades",
+    es: "Dominadas",
+    en: "Pull-ups",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["pull up", "pull-ups", "chin up", "chin-ups", "dominada", "dominadas", "dominades", "barra fija"],
+    muscles: ["dorsal", "biceps"],
+    aliases: ["pull up", "chin up", "chin-ups", "dominada", "barra fija"],
   },
   {
-    name: "Dominació a la màquina",
+    name: "Dominades assistides",
+    es: "Dominadas asistidas",
+    en: "Assisted pull-up machine",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["assisted pull up", "assisted pull-up machine", "dominada en maquina", "dominadas asistidas", "maquina", "machine"],
+    muscles: ["dorsal", "biceps"],
+    aliases: ["assisted pull up", "dominada en maquina", "maquina", "machine"],
   },
   {
-    name: "Tracció a la politja alta",
+    name: "Estirada al pit",
+    es: "Jalón al pecho",
+    en: "Lat pulldown",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["lat pulldown", "pulldown", "polea al pecho", "jalon al pecho", "jalon", "polea alta", "estirada al pit", "polea", "cable"],
+    muscles: ["dorsal", "biceps"],
+    aliases: ["pulldown", "polea al pecho", "jalon", "polea alta", "politja alta", "jalo al pit", "polea", "cable"],
   },
   {
-    name: "Rem a la cintura amb barra",
+    name: "Rem amb barra",
+    es: "Remo con barra",
+    en: "Barbell row",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["barbell row", "bent over row", "bent-over row", "remo con barra", "remo a la cintura", "remo", "row", "rem amb barra"],
+    muscles: ["dorsal", "trapezi", "biceps"],
+    aliases: ["bent over row", "bent-over row", "remo", "row", "barra", "barbell"],
   },
   {
-    name: "Rem a la cintura amb manuella",
+    name: "Rem amb manuella",
+    es: "Remo con mancuerna",
+    en: "Dumbbell row",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["dumbbell row", "one arm row", "single arm row", "remo con mancuerna", "remo a una mano", "remo", "row", "manuella", "mancuerna"],
+    muscles: ["dorsal", "trapezi", "biceps"],
+    aliases: ["one arm row", "single arm row", "remo a una mano", "remo", "row", "manuella", "mancuerna"],
   },
   {
-    name: "Rem Gironda",
+    name: "Rem a la politja baixa",
+    es: "Remo en polea baja",
+    en: "Seated cable row",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["seated cable row", "cable row", "remo con polea baja", "remo gironda", "remo sentado", "polea baja", "rem a la politja baixa", "polea", "cable"],
+    muscles: ["dorsal", "trapezi", "biceps"],
+    aliases: ["cable row", "remo gironda", "rem gironda", "remo sentado", "polea baja", "polea", "cable", "politja"],
   },
   {
-    name: "Rem al pit",
+    name: "Rem a la màquina",
+    es: "Remo en máquina",
+    en: "Machine row",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["chest row", "machine row", "seated row machine", "remo al pecho", "remo en maquina", "maquina", "machine"],
+    muscles: ["dorsal", "trapezi", "biceps"],
+    aliases: ["chest supported row", "seated row machine", "remo al pecho", "maquina", "machine"],
   },
   {
-    name: "Pul·lòver",
+    name: "Pullover",
+    es: "Pullover",
+    en: "Pullover",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["pullover", "pull over", "pull-over"],
+    muscles: ["dorsal", "pectoral"],
+    aliases: ["pull over", "pull-over", "pullover"],
   },
   {
-    name: "Ocell",
+    name: "Obertures posteriors",
+    es: "Pájaros",
+    en: "Reverse fly",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["reverse fly", "rear delt fly", "pajaro", "pajaros", "deltoides posterior", "obertures posteriors", "reverse pec deck"],
+    muscles: ["deltoides", "trapezi"],
+    aliases: ["rear delt fly", "pajaro", "ocell", "ocells", "deltoides posterior", "reverse pec deck"],
   },
   {
     name: "Pes mort",
+    es: "Peso muerto",
+    en: "Deadlift",
     kind: "reps",
     muscle: "cames",
-    aliases: ["deadlift", "peso muerto", "barra", "barbell"],
+    muscles: ["isquios", "glutis", "lumbars", "trapezi"],
+    aliases: ["barra", "barbell"],
   },
   {
-    name: "Extensió de tronc",
+    name: "Hiperextensions",
+    es: "Hiperextensiones",
+    en: "Back extension",
     kind: "reps",
     muscle: "esquena",
-    aliases: ["back extension", "hyperextension", "hyperextensions", "hiperextensio", "hiperextensions", "extension de tronco", "hiperextensiones", "lumbares", "banco romano"],
+    muscles: ["lumbars", "glutis", "isquios"],
+    aliases: ["hyperextension", "hyperextensions", "extension de tronco", "extensio de tronc", "banco romano"],
   },
   // Cames
   {
     name: "Esquat",
+    es: "Sentadilla",
+    en: "Squat",
     kind: "reps",
     muscle: "cames",
-    aliases: ["squat", "back squat", "sentadilla", "sentadillas", "esquats", "barra", "barbell"],
+    muscles: ["quadriceps", "glutis", "isquios"],
+    aliases: ["back squat", "sentadillas", "esquats", "barra", "barbell"],
   },
   {
     name: "Esquat frontal",
+    es: "Sentadilla frontal",
+    en: "Front squat",
     kind: "reps",
     muscle: "cames",
-    aliases: ["front squat", "sentadilla frontal"],
+    muscles: ["quadriceps", "glutis", "abdominals"],
+    aliases: [],
   },
   {
-    name: "Esquat a la màquina Smith",
+    name: "Esquat al multipower",
+    es: "Sentadilla en multipower",
+    en: "Smith machine squat",
     kind: "reps",
     muscle: "cames",
-    aliases: ["smith machine squat", "smith", "multipower", "sentadilla en multipower", "sentadilla en maquina multipower", "maquina", "machine"],
+    muscles: ["quadriceps", "glutis"],
+    aliases: ["smith", "multipower", "maquina smith", "maquina", "machine"],
   },
   {
     name: "Esquat búlgar",
+    es: "Sentadilla búlgara",
+    en: "Bulgarian split squat",
     kind: "reps",
     muscle: "cames",
-    aliases: ["bulgarian split squat", "split squat", "sentadilla bulgara"],
+    muscles: ["quadriceps", "glutis"],
+    aliases: ["split squat"],
   },
   {
-    name: "Pressió de cames",
+    name: "Premsa de cames",
+    es: "Prensa de piernas",
+    en: "Leg press",
     kind: "reps",
     muscle: "cames",
-    aliases: ["leg press", "prensa", "prensa de piernas", "premsa de cames", "maquina", "machine"],
+    muscles: ["quadriceps", "glutis", "isquios"],
+    aliases: ["prensa", "premsa", "maquina", "machine"],
   },
   {
-    name: "Tisora",
+    name: "Gambades",
+    es: "Zancadas",
+    en: "Lunges",
     kind: "reps",
     muscle: "cames",
-    aliases: ["lunge", "lunges", "zancada", "zancadas", "estocada", "estocadas", "gambades", "tisores"],
+    muscles: ["quadriceps", "glutis"],
+    aliases: ["lunge", "zancada", "estocada", "estocadas", "tisora", "tisores"],
   },
   {
-    name: "Extensió de cames",
+    name: "Extensió de quàdriceps",
+    es: "Extensión de cuádriceps",
+    en: "Leg extension",
     kind: "reps",
     muscle: "cames",
-    aliases: ["leg extension", "extension de rodillas", "extension de cuadriceps", "extensio de genolls", "extensio de quadriceps", "maquina", "machine"],
+    muscles: ["quadriceps"],
+    aliases: ["extension de rodillas", "extensio de cames", "extensio de genolls", "maquina", "machine"],
   },
   {
-    name: "Rull de cames",
+    name: "Curl femoral",
+    es: "Curl femoral",
+    en: "Leg curl",
     kind: "reps",
     muscle: "cames",
-    aliases: ["leg curl", "lying leg curl", "seated leg curl", "hamstring curl", "curl femoral", "curl femoral tumbado", "curl femoral sentado", "maquina", "machine"],
+    muscles: ["isquios"],
+    aliases: ["lying leg curl", "seated leg curl", "hamstring curl", "curl femoral tumbado", "curl femoral sentado", "maquina", "machine"],
   },
   {
-    name: "Elevació de malucs",
+    name: "Hip thrust",
+    es: "Hip thrust",
+    en: "Hip thrust",
     kind: "reps",
     muscle: "cames",
-    aliases: ["hip thrust", "glute bridge", "elevacion de pelvis", "elevacion de cadera", "empuje de cadera", "puente de gluteos", "empenta de maluc"],
+    muscles: ["glutis", "isquios"],
+    aliases: ["glute bridge", "elevacion de pelvis", "elevacion de cadera", "empuje de cadera", "puente de gluteos", "empenta de maluc", "elevacio de malucs"],
   },
   {
-    name: "Abducció de maluc",
+    name: "Màquina d'abductors",
+    es: "Máquina de abductores",
+    en: "Hip abduction machine",
     kind: "reps",
     muscle: "cames",
-    aliases: ["hip abduction", "abductor machine", "abduccion de cadera", "abductores", "maquina de abductores", "maquina", "machine"],
+    muscles: ["abductors", "glutis"],
+    aliases: ["hip abduction", "abductor machine", "abduccion de cadera", "abduccio de maluc", "maquina", "machine"],
   },
   {
-    name: "Adducció de maluc",
+    name: "Màquina d'adductors",
+    es: "Máquina de aductores",
+    en: "Hip adduction machine",
     kind: "reps",
     muscle: "cames",
-    aliases: ["hip adduction", "adductor machine", "aduccion de cadera", "aductores", "maquina de aductores", "maquina", "machine"],
+    muscles: ["adductors"],
+    aliases: ["hip adduction", "adductor machine", "aduccion de cadera", "adduccio de maluc", "maquina", "machine"],
   },
   {
-    name: "Panxells",
+    name: "Elevació de bessons",
+    es: "Elevación de gemelos",
+    en: "Standing calf raise",
     kind: "reps",
     muscle: "cames",
-    aliases: ["calf raise", "standing calf raise", "elevacion de talones", "gemelos", "elevacio de bessons", "pantorrillas", "calves"],
+    muscles: ["bessons"],
+    aliases: ["calf raise", "elevacion de talones", "pantorrillas", "panxells"],
   },
   {
-    name: "Pressió de panxells",
+    name: "Bessons a la premsa",
+    es: "Gemelos en prensa",
+    en: "Calf press",
     kind: "reps",
     muscle: "cames",
-    aliases: ["calf press", "press calf raise", "gemelos en prensa", "pantorrillas en prensa", "maquina", "machine"],
+    muscles: ["bessons"],
+    aliases: ["leg press calf raise", "pantorrillas en prensa", "panxells", "maquina", "machine"],
   },
   // Espatlles
   {
-    name: "Pressió d'espatlles",
+    name: "Press d'espatlles",
+    es: "Press militar",
+    en: "Shoulder press",
     kind: "reps",
     muscle: "espatlles",
-    aliases: ["shoulder press", "overhead press", "military press", "press militar", "press de hombros", "ohp"],
+    muscles: ["deltoides", "triceps"],
+    aliases: ["overhead press", "military press", "press de hombros", "ohp", "press militar"],
   },
   {
-    name: "Pressió Arnold",
+    name: "Press Arnold",
+    es: "Press Arnold",
+    en: "Arnold press",
     kind: "reps",
     muscle: "espatlles",
-    aliases: ["arnold press", "press arnold"],
+    muscles: ["deltoides", "triceps"],
+    aliases: [],
   },
   {
-    name: "Elevació lateral",
+    name: "Elevacions laterals",
+    es: "Elevaciones laterales",
+    en: "Lateral raise",
     kind: "reps",
     muscle: "espatlles",
-    aliases: ["lateral raise", "side raise", "elevaciones laterales", "elevacion lateral", "elevacions laterals"],
+    muscles: ["deltoides"],
+    aliases: ["side raise", "elevacion lateral"],
   },
   {
-    name: "Elevació frontal",
+    name: "Elevacions frontals",
+    es: "Elevaciones frontales",
+    en: "Front raise",
     kind: "reps",
     muscle: "espatlles",
-    aliases: ["front raise", "elevaciones frontales", "elevacion frontal", "elevacions frontals"],
+    muscles: ["deltoides"],
+    aliases: ["elevacion frontal"],
   },
   {
-    name: "Rem vertical",
+    name: "Rem al mentó",
+    es: "Remo al mentón",
+    en: "Upright row",
     kind: "reps",
     muscle: "espatlles",
-    aliases: ["upright row", "remo vertical", "remo al menton", "rem al mento"],
+    muscles: ["deltoides", "trapezi"],
+    aliases: ["remo vertical", "rem vertical"],
   },
   {
-    name: "Encongiment d'espatlles",
+    name: "Encongiments d'espatlles",
+    es: "Encogimientos de hombros",
+    en: "Shrugs",
     kind: "reps",
     muscle: "espatlles",
-    aliases: ["shrug", "shoulder shrug", "shrugs", "encogimiento de hombros", "trapecio"],
+    muscles: ["trapezi"],
+    aliases: ["shrug", "shoulder shrug", "encogimiento de hombros", "trapecio"],
   },
   // Braços
   {
-    name: "Rull de braços",
+    name: "Curl de bíceps amb barra",
+    es: "Curl de bíceps con barra",
+    en: "Barbell curl",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["biceps curl", "barbell curl", "curl", "curl de biceps", "curl con barra", "curl de biceps amb barra"],
+    muscles: ["biceps", "avantbrac"],
+    aliases: ["biceps curl", "curl", "barra", "barbell"],
   },
   {
-    name: "Rull de braços altern",
+    name: "Curl de bíceps amb manuelles",
+    es: "Curl con mancuernas",
+    en: "Dumbbell curl",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["alternate curl", "dumbbell curl", "curl alterno", "curl con mancuernas", "curl de biceps con mancuernas", "manuelles", "mancuernas"],
+    muscles: ["biceps", "avantbrac"],
+    aliases: ["alternate curl", "curl alterno", "curl altern", "manuelles", "mancuernas"],
   },
   {
-    name: "Rull de martell",
+    name: "Curl martell",
+    es: "Curl martillo",
+    en: "Hammer curl",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["hammer curl", "curl martillo", "curl martell"],
+    muscles: ["biceps", "avantbrac"],
+    aliases: ["manuelles", "mancuernas"],
   },
   {
-    name: "Rull Scott",
+    name: "Curl Scott",
+    es: "Curl en banco Scott",
+    en: "Preacher curl",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["preacher curl", "curl scott", "banco scott", "biceps con banca romana"],
+    muscles: ["biceps"],
+    aliases: ["curl scott", "banco scott", "banc scott"],
   },
   {
-    name: "Rull de braç concentrat",
+    name: "Curl concentrat",
+    es: "Curl concentrado",
+    en: "Concentration curl",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["concentration curl", "curl concentrado"],
+    muscles: ["biceps"],
+    aliases: ["manuella", "mancuerna"],
   },
   {
-    name: "Pressió francesa",
+    name: "Press francès",
+    es: "Press francés",
+    en: "Skull crusher",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["skull crusher", "french press", "lying triceps extension", "press frances", "extension de triceps", "extensio de triceps"],
+    muscles: ["triceps"],
+    aliases: ["french press", "lying triceps extension", "extension de triceps", "extensio de triceps"],
   },
   {
-    name: "Extensió de tríceps a la politja",
+    name: "Tríceps a la politja",
+    es: "Extensión de tríceps en polea",
+    en: "Triceps pushdown",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["triceps pushdown", "cable pushdown", "pushdown", "extension de triceps en polea", "jalon de triceps", "polea", "cable"],
+    muscles: ["triceps"],
+    aliases: ["cable pushdown", "pushdown", "jalon de triceps", "extensio de triceps", "polea", "cable", "politja"],
   },
   {
-    name: "Fons de braços",
+    name: "Fons de tríceps al banc",
+    es: "Fondos de tríceps en banco",
+    en: "Bench dips",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["triceps dips", "bench dips", "fondos", "fondos de triceps", "fondos en banco", "fons de triceps al banc"],
+    muscles: ["triceps", "pectoral"],
+    aliases: ["triceps dips", "fondos", "fondos en banco", "fons de bracos"],
   },
   {
-    name: "Puntada de tríceps",
+    name: "Patada de tríceps",
+    es: "Patada de tríceps",
+    en: "Triceps kickback",
     kind: "reps",
     muscle: "bracos",
-    aliases: ["triceps kickback", "kickback", "patada de triceps"],
+    muscles: ["triceps"],
+    aliases: ["kickback", "manuella", "mancuerna"],
   },
   // Abdominals / zona central
   {
-    name: "Rull de tronc",
+    name: "Crunch abdominal",
+    es: "Crunch abdominal",
+    en: "Crunch",
     kind: "reps",
     muscle: "core",
-    aliases: ["crunch", "abdominal crunch", "sit up", "curl de tronco", "encogimiento abdominal", "abdominales", "encongiment abdominal"],
+    muscles: ["abdominals"],
+    aliases: ["abdominal crunch", "sit up", "encogimiento abdominal", "encongiment abdominal", "abdominales"],
   },
   {
-    name: "Rull de malucs",
+    name: "Crunch invers",
+    es: "Crunch inverso",
+    en: "Reverse crunch",
     kind: "reps",
     muscle: "core",
-    aliases: ["reverse crunch", "curl de caderas", "crunch inverso"],
+    muscles: ["abdominals"],
+    aliases: ["curl de caderas"],
   },
   {
     name: "Elevació de cames penjat",
+    es: "Elevación de piernas colgado",
+    en: "Hanging leg raise",
     kind: "reps",
     muscle: "core",
-    aliases: ["hanging leg raise", "leg raise", "elevacion de piernas", "elevacion de piernas colgado"],
+    muscles: ["abdominals", "oblics"],
+    aliases: ["leg raise", "elevacion de piernas"],
   },
   {
-    name: "Abdominals amb roda",
+    name: "Roda abdominal",
+    es: "Rueda abdominal",
+    en: "Ab wheel rollout",
     kind: "reps",
     muscle: "core",
-    aliases: ["ab wheel", "ab rollout", "rueda abdominal", "rueda"],
+    muscles: ["abdominals", "lumbars"],
+    aliases: ["ab wheel", "ab rollout", "rueda", "roda"],
   },
   {
-    name: "Planxa amb quatre suports",
+    name: "Planxa",
+    es: "Plancha",
+    en: "Plank",
     kind: "time",
     muscle: "core",
-    aliases: ["plank", "front plank", "four point plank", "plancha", "plancha abdominal", "plancha con cuatro apoyos", "planxa"],
+    muscles: ["abdominals", "lumbars"],
+    aliases: ["front plank", "plancha abdominal"],
   },
   {
-    name: "Pont lateral",
+    name: "Planxa lateral",
+    es: "Plancha lateral",
+    en: "Side plank",
     kind: "time",
     muscle: "core",
-    aliases: ["side plank", "side bridge", "plancha lateral", "planxa lateral"],
+    muscles: ["oblics", "abdominals"],
+    aliases: ["side bridge", "pont lateral"],
   },
   {
     name: "Gir rus",
+    es: "Giro ruso",
+    en: "Russian twist",
     kind: "reps",
     muscle: "core",
-    aliases: ["russian twist", "giro ruso"],
+    muscles: ["oblics", "abdominals"],
+    aliases: [],
   },
   // Cardio / altres
   {
     name: "Cinta de córrer",
+    es: "Cinta de correr",
+    en: "Treadmill",
     kind: "time",
     muscle: "cardio",
-    aliases: ["treadmill", "running", "run", "cinta de correr", "cinta", "correr", "maquina", "machine"],
+    muscles: ["cardio", "quadriceps", "bessons"],
+    aliases: ["running", "run", "cinta", "correr", "maquina", "machine"],
   },
   {
     name: "Bicicleta estàtica",
+    es: "Bicicleta estática",
+    en: "Stationary bike",
     kind: "time",
     muscle: "cardio",
-    aliases: ["stationary bike", "exercise bike", "spinning", "bicicleta estatica", "bici", "maquina", "machine"],
+    muscles: ["cardio", "quadriceps"],
+    aliases: ["exercise bike", "spinning", "bici", "maquina", "machine"],
   },
   {
     name: "El·líptica",
+    es: "Elíptica",
+    en: "Elliptical",
     kind: "time",
     muscle: "cardio",
-    aliases: ["elliptical", "cross trainer", "eliptica", "maquina", "machine"],
+    muscles: ["cardio", "quadriceps", "glutis"],
+    aliases: ["cross trainer", "maquina", "machine"],
   },
   {
     name: "Màquina de rem",
+    es: "Remo (máquina)",
+    en: "Rowing machine",
     kind: "time",
     muscle: "cardio",
-    aliases: ["rowing machine", "rower", "ergometer", "remo", "remoergometro", "maquina de remo", "ergometre de rem", "machine"],
+    muscles: ["cardio", "dorsal", "quadriceps"],
+    aliases: ["rower", "ergometer", "remo", "remoergometro", "ergometre de rem", "machine"],
   },
   {
     name: "Escaladora",
+    es: "Escaladora",
+    en: "Stair climber",
     kind: "time",
     muscle: "cardio",
-    aliases: ["stair climber", "stairmaster", "stepper", "escaladora", "escaleras", "maquina", "machine"],
+    muscles: ["cardio", "glutis", "quadriceps"],
+    aliases: ["stairmaster", "stepper", "escaleras", "maquina", "machine"],
   },
   {
     name: "Saltar a corda",
+    es: "Saltar a la comba",
+    en: "Jump rope",
     kind: "time",
     muscle: "cardio",
-    aliases: ["jump rope", "skipping", "saltar a la comba", "comba", "cuerda", "corda de saltar"],
+    muscles: ["cardio", "bessons"],
+    aliases: ["skipping", "comba", "cuerda", "corda de saltar"],
   },
   {
-    name: "Burpee",
+    name: "Burpees",
+    es: "Burpees",
+    en: "Burpees",
     kind: "reps",
     muscle: "cardio",
-    aliases: ["burpees"],
+    muscles: ["cardio", "pectoral", "quadriceps"],
+    aliases: ["burpee"],
   },
   {
     name: "Passeig del granger",
+    es: "Paseo del granjero",
+    en: "Farmer's walk",
     kind: "time",
     muscle: "cardio",
-    aliases: ["farmer walk", "farmers walk", "farmer's carry", "paseo del granjero"],
+    muscles: ["avantbrac", "trapezi", "abdominals"],
+    aliases: ["farmer walk", "farmers walk", "farmer's carry"],
   },
 ];
 
 /**
- * Noms que el catàleg ha fet servir abans (castellanismes, ortografia
- * incorrecta i els de la versió anterior, que no seguien el TERMCAT) → nom
- * actual. Les entrades, les plantilles i les còpies importades es reanomenen
- * perquè «Recents», l'historial i els valors de l'última vegada continuïn
- * lligats al mateix exercici.
+ * Noms que el catàleg ha fet servir abans de la versió TERMCAT (castellanismes,
+ * ortografia incorrecta…) → nom TERMCAT. `canonicalExerciseName` hi aplica
+ * després `TERMCAT_TO_GYM_NAMES`. Les entrades, les plantilles i les còpies
+ * importades es reanomenen perquè «Recents», l'historial i els valors de
+ * l'última vegada continuïn lligats al mateix exercici.
  */
 export const LEGACY_EXERCISE_NAMES: Record<string, string> = {
   // Primera versió
@@ -505,8 +737,62 @@ export const LEGACY_EXERCISE_NAMES: Record<string, string> = {
   "Planxa lateral": "Pont lateral",
 };
 
+/** Noms TERMCAT (tercera versió) → noms de gimnàs actuals. */
+export const TERMCAT_TO_GYM_NAMES: Record<string, string> = {
+  "Pressió sobre banc": "Press de banca",
+  "Pressió sobre banc inclinat": "Press inclinat",
+  "Pressió sobre banc declinat": "Press declinat",
+  "Pressió de pit": "Press de pit a la màquina",
+  Obertura: "Obertures amb manuelles",
+  "Obertura a la politja": "Creuament de politges",
+  Papallona: "Contractora de pit",
+  "Fons a terra": "Flexions",
+  Dominació: "Dominades",
+  "Dominació a la màquina": "Dominades assistides",
+  "Tracció a la politja alta": "Estirada al pit",
+  "Rem a la cintura amb barra": "Rem amb barra",
+  "Rem a la cintura amb manuella": "Rem amb manuella",
+  "Rem Gironda": "Rem a la politja baixa",
+  "Rem al pit": "Rem a la màquina",
+  "Pul·lòver": "Pullover",
+  Ocell: "Obertures posteriors",
+  "Extensió de tronc": "Hiperextensions",
+  "Esquat a la màquina Smith": "Esquat al multipower",
+  "Pressió de cames": "Premsa de cames",
+  Tisora: "Gambades",
+  "Extensió de cames": "Extensió de quàdriceps",
+  "Rull de cames": "Curl femoral",
+  "Elevació de malucs": "Hip thrust",
+  "Abducció de maluc": "Màquina d'abductors",
+  "Adducció de maluc": "Màquina d'adductors",
+  Panxells: "Elevació de bessons",
+  "Pressió de panxells": "Bessons a la premsa",
+  "Pressió d'espatlles": "Press d'espatlles",
+  "Pressió Arnold": "Press Arnold",
+  "Elevació lateral": "Elevacions laterals",
+  "Elevació frontal": "Elevacions frontals",
+  "Rem vertical": "Rem al mentó",
+  "Encongiment d'espatlles": "Encongiments d'espatlles",
+  "Rull de braços": "Curl de bíceps amb barra",
+  "Rull de braços altern": "Curl de bíceps amb manuelles",
+  "Rull de martell": "Curl martell",
+  "Rull Scott": "Curl Scott",
+  "Rull de braç concentrat": "Curl concentrat",
+  "Pressió francesa": "Press francès",
+  "Extensió de tríceps a la politja": "Tríceps a la politja",
+  "Fons de braços": "Fons de tríceps al banc",
+  "Puntada de tríceps": "Patada de tríceps",
+  "Rull de tronc": "Crunch abdominal",
+  "Rull de malucs": "Crunch invers",
+  "Abdominals amb roda": "Roda abdominal",
+  "Planxa amb quatre suports": "Planxa",
+  "Pont lateral": "Planxa lateral",
+  Burpee: "Burpees",
+};
+
 export function canonicalExerciseName(name: string): string {
-  return LEGACY_EXERCISE_NAMES[name] ?? name;
+  const termcat = LEGACY_EXERCISE_NAMES[name] ?? name;
+  return TERMCAT_TO_GYM_NAMES[termcat] ?? termcat;
 }
 
 /**
@@ -527,14 +813,23 @@ export function normalizeForSearch(text: string): string {
 const SEARCH_TEXT = new Map(
   CATALOG_SEED.map((c) => [
     `${c.name} ${c.kind}`,
-    normalizeForSearch([c.name, ...c.aliases, ...MUSCLE_ALIASES[c.muscle]].join(" | ")),
+    normalizeForSearch(
+      [
+        c.name,
+        c.es,
+        c.en,
+        ...c.aliases,
+        ...MUSCLE_ALIASES[c.muscle],
+        ...c.muscles.flatMap((m) => Object.values(MUSCLE_NAMES[m])),
+      ].join(" | "),
+    ),
   ]),
 );
 
 /**
  * Coincideix si TOTES les paraules de la cerca apareixen (en qualsevol
- * ordre) al nom català, als noms en castellà o anglès, al material o al grup
- * muscular: «curl leg», «polea», «pecho», «machine», «jalon»…
+ * ordre) al nom català, als noms en castellà o anglès, al material, al grup
+ * muscular o als músculs: «curl leg», «polea», «pecho», «machine», «glutis»…
  */
 export function matchesExerciseQuery(option: { name: string; kind: ExerciseKind }, query: string): boolean {
   const words = normalizeForSearch(query).split(" ").filter(Boolean);
@@ -546,12 +841,31 @@ export function matchesExerciseQuery(option: { name: string; kind: ExerciseKind 
 /** La cerca és exactament el nom (o un àlies sencer) d'un exercici del catàleg? */
 export function isExactCatalogMatch(query: string): boolean {
   const q = normalizeForSearch(query);
-  return CATALOG_SEED.some((c) => normalizeForSearch(c.name) === q || c.aliases.some((a) => normalizeForSearch(a) === q));
+  return CATALOG_SEED.some((c) => [c.name, c.es, c.en, ...c.aliases].some((a) => normalizeForSearch(a) === q));
 }
 
-const MUSCLES = new Map(CATALOG_SEED.map((c) => [`${c.name} ${c.kind}`, c.muscle]));
+const CATALOG = new Map(CATALOG_SEED.map((c) => [`${c.name} ${c.kind}`, c]));
+
+/** L'exercici del catàleg amb aquest nom i tipus (cap per als creats per l'usuari). */
+export function catalogExercise(option: { name: string; kind: ExerciseKind }): CatalogExercise | undefined {
+  return CATALOG.get(`${option.name} ${option.kind}`);
+}
+
+/**
+ * Noms en castellà i anglès per mostrar sota el català, sense repetir-ne cap
+ * d'igual (p. ex. «Hip thrust» surt només una vegada).
+ */
+export function otherLanguageNames(c: CatalogExercise): string[] {
+  const seen = new Set([normalizeForSearch(c.name)]);
+  return [c.es, c.en].filter((n) => {
+    const key = normalizeForSearch(n);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 /** Grup muscular d'un exercici del catàleg; «altres» per als creats per l'usuari. */
 export function muscleGroupOf(option: { name: string; kind: ExerciseKind }): MuscleGroup | "altres" {
-  return MUSCLES.get(`${option.name} ${option.kind}`) ?? "altres";
+  return catalogExercise(option)?.muscle ?? "altres";
 }

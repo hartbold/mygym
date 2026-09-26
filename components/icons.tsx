@@ -154,6 +154,15 @@ export function WarningIcon(props: IconProps) {
   );
 }
 
+export function QuestionIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.6 9.6a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.2-2.5 3.7M12 16.8v.2" />
+    </Icon>
+  );
+}
+
 export function InstallIcon(props: IconProps) {
   return (
     <Icon {...props}>

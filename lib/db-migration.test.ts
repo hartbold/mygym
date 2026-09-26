@@ -16,5 +16,5 @@ it("v2 reanomena les entrades desades amb els noms antics del catàleg", async (
 
   const { db } = await import("./db");
   const names = Object.fromEntries((await db.entries.toArray()).map((e) => [e.id, e.name]));
-  expect(names).toEqual({ a: "Pes mort", b: "Planxa amb quatre suports", c: "Esquat", d: "El meu exercici" });
+  expect(names).toEqual({ a: "Pes mort", b: "Planxa", c: "Esquat", d: "El meu exercici" });
 });

@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CATALOG_SEED, isExactCatalogMatch, matchesExerciseQuery, normalizeForSearch } from "@/lib/catalog-seed";
+import {
+  CATALOG_SEED,
+  catalogExercise,
+  type CatalogExercise,
+  isExactCatalogMatch,
+  matchesExerciseQuery,
+  MUSCLE_NAMES,
+  normalizeForSearch,
+  otherLanguageNames,
+} from "@/lib/catalog-seed";
 import { recentExercises } from "@/lib/sessions";
 import type { Entry, ExerciseKind } from "@/lib/types";
 import { XmarkIcon } from "./icons";
@@ -40,22 +49,26 @@ export function ExercisePicker({
   function optionList(options: { name: string; kind: ExerciseKind }[]) {
     return (
       <List>
-        {options.map((o) => (
-          <ListItem
-            key={`${o.name} ${o.kind}`}
-            title={o.name}
-            ariaLabel={o.name}
-            chevron
-            onClick={() => onPick(o.name, o.kind)}
-            trailing={
-              o.kind === "time" ? (
-                <span aria-hidden="true" className="text-subhead text-label-2">
-                  Temps
-                </span>
-              ) : undefined
-            }
-          />
-        ))}
+        {options.map((o) => {
+          const c = catalogExercise(o);
+          return (
+            <ListItem
+              key={`${o.name} ${o.kind}`}
+              title={o.name}
+              subtitle={c && <CatalogDetails exercise={c} />}
+              ariaLabel={o.name}
+              chevron
+              onClick={() => onPick(o.name, o.kind)}
+              trailing={
+                o.kind === "time" ? (
+                  <span aria-hidden="true" className="text-subhead text-label-2">
+                    Temps
+                  </span>
+                ) : undefined
+              }
+            />
+          );
+        })}
       </List>
     );
   }
@@ -74,6 +87,26 @@ export function ExercisePicker({
       {recentMatches.length > 0 && <Section header="Recents">{optionList(recentMatches)}</Section>}
       {seedMatches.length > 0 && <Section header="Tots els exercicis">{optionList(seedMatches)}</Section>}
     </div>
+  );
+}
+
+/**
+ * Sota el nom català: el nom en castellà i en anglès (per saber què es tria
+ * quan s'ha cercat en un altre idioma) i els músculs que treballa.
+ */
+function CatalogDetails({ exercise: c }: { exercise: CatalogExercise }) {
+  const others = otherLanguageNames(c);
+  return (
+    <>
+      {others.length > 0 && <span className="block truncate text-footnote">{others.join(" · ")}</span>}
+      <span className="mt-1 flex flex-wrap gap-1">
+        {c.muscles.map((m) => (
+          <span key={m} className="rounded-full bg-fill-3 px-2 py-px text-caption2 font-medium text-label-2">
+            {MUSCLE_NAMES[m].ca}
+          </span>
+        ))}
+      </span>
+    </>
   );
 }
 

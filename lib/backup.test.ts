@@ -169,7 +169,7 @@ describe("plantilles al backup", () => {
     if (!parsed.ok) return;
     await importBackup(parsed.value);
     // Nom antic normalitzat en importar.
-    expect((await db.templates.get("t1"))?.exercises[0].name).toBe("Pressió sobre banc");
+    expect((await db.templates.get("t1"))?.exercises[0].name).toBe("Press de banca");
     await importBackup(buildBackup([], 0, { templates: [{ ...t, name: "Vella", updatedAt: 5 }] }));
     expect((await db.templates.get("t1"))?.name).toBe("Empenta");
   });

@@ -1,0 +1,5 @@
+auto-install-peers=true
+shamefully-hoist=false
+ignore-scripts-if-hoisted=false
+package-import-method=auto
+approve-builds=true

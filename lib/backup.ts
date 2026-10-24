@@ -1,29 +1,37 @@
-import { db } from "./db";
+import { db, deletionKey } from "./db";
 import { canonicalExerciseName } from "./catalog-seed";
 import { isValidDateKey, localDateKey } from "./dates";
-import type { BodyWeight, Entry, EntrySet, PlannedSet, Profile, Template } from "./types";
+import type { BodyWeight, Deletion, Entry, EntrySet, PlannedSet, Profile, SyncedTable, Template } from "./types";
 
 /**
- * v2 afegeix el pes corporal i el perfil (opcionals). Les còpies v1 (només
- * `entries`) es continuen important igual.
+ * v2 afegeix el pes corporal i el perfil (opcionals); v3, els esborrats (només
+ * els fa servir la sincronització). Les còpies v1 (només `entries`) es
+ * continuen important igual.
  */
 export interface BackupEnvelope {
   app: "mygym";
-  formatVersion: 2;
+  formatVersion: 3;
   exportedAt: string;
-  data: { entries: Entry[]; bodyWeights?: BodyWeight[]; profile?: Profile; templates?: Template[] };
+  data: {
+    entries: Entry[];
+    bodyWeights?: BodyWeight[];
+    profile?: Profile;
+    templates?: Template[];
+    deletions?: Deletion[];
+  };
 }
 
 export function buildBackup(
   entries: Entry[],
   now: number,
-  body: { bodyWeights?: BodyWeight[]; profile?: Profile; templates?: Template[] } = {},
+  body: { bodyWeights?: BodyWeight[]; profile?: Profile; templates?: Template[]; deletions?: Deletion[] } = {},
 ): BackupEnvelope {
   const data: BackupEnvelope["data"] = { entries };
   if (body.bodyWeights?.length) data.bodyWeights = body.bodyWeights;
   if (body.profile) data.profile = body.profile;
   if (body.templates?.length) data.templates = body.templates;
-  return { app: "mygym", formatVersion: 2, exportedAt: new Date(now).toISOString(), data };
+  if (body.deletions?.length) data.deletions = body.deletions;
+  return { app: "mygym", formatVersion: 3, exportedAt: new Date(now).toISOString(), data };
 }
 
 export function backupFileName(now: number): string {
@@ -53,7 +61,7 @@ export function validateBackup(input: unknown): ValidationResult {
   if (obj.app !== "mygym") {
     return { ok: false, error: "Aquest fitxer no és una còpia de MY GYM." };
   }
-  if (obj.formatVersion !== 1 && obj.formatVersion !== 2) {
+  if (obj.formatVersion !== 1 && obj.formatVersion !== 2 && obj.formatVersion !== 3) {
     return { ok: false, error: `Versió de format desconeguda (${String(obj.formatVersion)}).` };
   }
   if (typeof obj.exportedAt !== "string") {
@@ -71,7 +79,7 @@ export function validateBackup(input: unknown): ValidationResult {
     entries.push(entry);
   }
 
-  const value: BackupEnvelope = { app: "mygym", formatVersion: 2, exportedAt: obj.exportedAt, data: { entries } };
+  const value: BackupEnvelope = { app: "mygym", formatVersion: 3, exportedAt: obj.exportedAt, data: { entries } };
 
   if (data.bodyWeights !== undefined) {
     if (!Array.isArray(data.bodyWeights)) return { ok: false, error: "El registre de pes no és vàlid." };
@@ -100,7 +108,30 @@ export function validateBackup(input: unknown): ValidationResult {
     value.data.templates = templates;
   }
 
+  if (data.deletions !== undefined) {
+    if (!Array.isArray(data.deletions)) return { ok: false, error: "El registre d'esborrats no és vàlid." };
+    const deletions: Deletion[] = [];
+    for (const raw of data.deletions) {
+      const d = validateDeletion(raw);
+      if (!d) return { ok: false, error: "Un dels esborrats no és vàlid." };
+      deletions.push(d);
+    }
+    value.data.deletions = deletions;
+  }
+
   return { ok: true, value };
+}
+
+const SYNCED_TABLES: readonly SyncedTable[] = ["entries", "bodyWeights", "templates"];
+
+function validateDeletion(raw: unknown): Deletion | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const d = raw as Record<string, unknown>;
+  if (!SYNCED_TABLES.includes(d.table as SyncedTable)) return null;
+  if (typeof d.id !== "string" || d.id === "" || !isFiniteNonNegative(d.deletedAt)) return null;
+  const table = d.table as SyncedTable;
+  // La clau es recalcula: mai es confia en la del fitxer.
+  return { key: deletionKey(table, d.id), table, id: d.id, deletedAt: d.deletedAt };
 }
 
 function validatePlannedSet(raw: unknown): PlannedSet | null {
@@ -224,49 +255,85 @@ export interface ImportSummary {
   added: number;
   updated: number;
   skipped: number;
+  /** Només en sincronitzar: elements locals esborrats en un altre dispositiu. */
+  removed: number;
 }
 
 /**
- * Importa NOMÉS fusionant: ids nous s'afegeixen, per als existents guanya
- * el `updatedAt` més gran, mai s'esborra res. Tota entrada importada es
- * coerceix a `status:'done'` perquè la invariant «com a molt un actiu» es
- * mantingui per construcció, sense un pas separat després del commit.
- * Tot dins una única transacció: un error deixa les dades tal com estaven.
+ * Importa una còpia de fitxer NOMÉS fusionant: ids nous s'afegeixen, per als
+ * existents guanya el `updatedAt` més gran, mai s'esborra res.
  */
-export async function importBackup(envelope: BackupEnvelope): Promise<ImportSummary> {
-  const summary: ImportSummary = { added: 0, updated: 0, skipped: 0 };
-  await db.transaction("rw", [db.entries, db.bodyWeights, db.profile, db.templates], async () => {
-    for (const raw of envelope.data.entries) {
-      // raw.endedAt només falta quan raw.status era 'active' (validateEntry
-      // ho garanteix per als 'done'); en aquest cas es dedueix de l'última
-      // activitat coneguda perquè la invariant es mantingui sense un pas apart.
-      const lastActivity = Math.max(
-        raw.startedAt,
-        raw.updatedAt,
-        ...raw.sets.map((s) => s.doneAt),
-      );
-      const entry: Entry = {
-        ...raw,
-        status: "done",
-        endedAt: raw.endedAt ?? lastActivity,
-      };
-      delete entry.autoClosed; // no coneixem la causa real del tancament al re-importar
+export function importBackup(envelope: BackupEnvelope): Promise<ImportSummary> {
+  return mergeEnvelope(envelope, "import");
+}
 
-      const existing = await db.entries.get(entry.id);
-      if (!existing) {
-        await db.entries.add(entry);
-        summary.added++;
-      } else if (entry.updatedAt > existing.updatedAt) {
-        await db.entries.put(entry);
-        summary.updated++;
-      } else {
-        summary.skipped++;
+/**
+ * Fusió compartida per la importació de fitxers i la sincronització. Per a
+ * cada element guanya el `updatedAt` més gran. Tot dins una única
+ * transacció: un error deixa les dades tal com estaven.
+ *
+ * - `"import"`: tota entrada importada es coerceix a `status:'done'` perquè
+ *   la invariant «com a molt un actiu» es mantingui per construcció. Els
+ *   esborrats del fitxer s'ignoren.
+ * - `"sync"`: l'entrada activa d'un altre dispositiu es manté activa si aquí
+ *   no n'hi ha cap altra. Els esborrats s'uneixen (guanya el més recent) i un
+ *   element amb un esborrat igual o posterior al seu `updatedAt` desapareix.
+ *   Si no hi ha res nou no s'escriu res (així no es dispara un altre sync).
+ */
+export async function mergeEnvelope(envelope: BackupEnvelope, mode: "import" | "sync"): Promise<ImportSummary> {
+  const sync = mode === "sync";
+  const summary: ImportSummary = { added: 0, updated: 0, skipped: 0, removed: 0 };
+  await db.transaction("rw", [db.entries, db.bodyWeights, db.profile, db.templates, db.deletions], async () => {
+    const deletedAt = new Map<string, number>();
+    if (sync) {
+      for (const d of await db.deletions.toArray()) deletedAt.set(d.key, d.deletedAt);
+      for (const d of envelope.data.deletions ?? []) {
+        const local = deletedAt.get(d.key);
+        if (local !== undefined && local >= d.deletedAt) continue;
+        await db.deletions.put(d);
+        deletedAt.set(d.key, d.deletedAt);
       }
+    }
+    const isDeleted = (table: SyncedTable, id: string, updatedAt: number) =>
+      (deletedAt.get(deletionKey(table, id)) ?? -1) >= updatedAt;
+
+    let hasActive = sync && (await db.entries.where("status").equals("active").count()) > 0;
+    for (const raw of envelope.data.entries) {
+      if (isDeleted("entries", raw.id, raw.updatedAt)) {
+        summary.skipped++;
+        continue;
+      }
+      const existing = await db.entries.get(raw.id);
+      if (existing && raw.updatedAt <= existing.updatedAt) {
+        summary.skipped++;
+        continue;
+      }
+
+      let entry: Entry = raw;
+      const keepActive = sync && raw.status === "active" && (existing?.status === "active" || !hasActive);
+      if (keepActive) {
+        hasActive = true;
+      } else if (raw.status === "active" || !sync) {
+        // raw.endedAt només falta quan raw.status era 'active' (validateEntry
+        // ho garanteix per als 'done'); en aquest cas es dedueix de l'última
+        // activitat coneguda perquè la invariant es mantingui sense un pas apart.
+        const lastActivity = Math.max(raw.startedAt, raw.updatedAt, ...raw.sets.map((s) => s.doneAt));
+        entry = { ...raw, status: "done", endedAt: raw.endedAt ?? lastActivity };
+        if (!sync) delete entry.autoClosed; // no coneixem la causa real del tancament al re-importar
+      }
+
+      await db.entries.put(entry);
+      if (existing) summary.updated++;
+      else summary.added++;
     }
 
     // Pes corporal: un registre per dia, així que es fusiona per data (no per
     // id: dos dispositius poden haver anotat el mateix dia amb ids diferents).
     for (const w of envelope.data.bodyWeights ?? []) {
+      if (isDeleted("bodyWeights", w.date, w.updatedAt)) {
+        summary.skipped++;
+        continue;
+      }
       const existing = await db.bodyWeights.where("date").equals(w.date).first();
       if (!existing) {
         await db.bodyWeights.add(w);
@@ -280,6 +347,10 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportSumm
     }
 
     for (const t of envelope.data.templates ?? []) {
+      if (isDeleted("templates", t.id, t.updatedAt)) {
+        summary.skipped++;
+        continue;
+      }
       const existing = await db.templates.get(t.id);
       if (!existing) {
         await db.templates.add(t);
@@ -296,6 +367,26 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportSumm
     if (profile) {
       const existing = await db.profile.get("me");
       if (!existing || profile.updatedAt > existing.updatedAt) await db.profile.put(profile);
+    }
+
+    // Esborrats d'altres dispositius sobre elements que aquí ja hi eren.
+    if (sync) {
+      for (const d of await db.deletions.toArray()) {
+        if (d.table === "bodyWeights") {
+          const w = await db.bodyWeights.where("date").equals(d.id).first();
+          if (w && d.deletedAt >= w.updatedAt) {
+            await db.bodyWeights.delete(w.id);
+            summary.removed++;
+          }
+          continue;
+        }
+        const table = d.table === "entries" ? db.entries : db.templates;
+        const item = await table.get(d.id);
+        if (item && d.deletedAt >= item.updatedAt) {
+          await table.delete(d.id);
+          summary.removed++;
+        }
+      }
     }
   });
   return summary;

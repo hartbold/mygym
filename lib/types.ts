@@ -98,3 +98,17 @@ export interface Workout {
   exercises: WorkoutExercise[];
   updatedAt: number;
 }
+
+/** Taules que se sincronitzen (la sessió carregada, `workouts`, és local). */
+export type SyncedTable = "entries" | "bodyWeights" | "templates";
+
+/**
+ * Esborrat d'un element sincronitzat. `id` és l'id de l'element, excepte a
+ * `bodyWeights`, on és la data (un registre per dia, fusionat per data).
+ */
+export interface Deletion {
+  key: string;
+  table: SyncedTable;
+  id: string;
+  deletedAt: number;
+}

@@ -5,7 +5,9 @@ Aplicació de seguiment de les rutines de gimnàs.
 Gestor d'entrenaments molt senzill: a cada sessió (agrupada automàticament
 per dia) es van afegint exercicis a mesura que es fan, amb sèries de pes i
 repeticions (o de temps) editables independentment. Totes les dades es
-desen **al navegador** (IndexedDB) — no hi ha cap servidor ni compte.
+desen **al navegador** (IndexedDB) — no hi ha cap servidor ni compte —
+i, opcionalment, es **sincronitzen amb un WebDAV** de cada usuari (vegeu
+[Sincronització WebDAV](#sincronització-webdav)).
 La pestanya **Progrés** mostra rècords, baixades de pes i estancaments,
 constància setmanal, durada mitjana per dia, sèries per grup muscular,
 l'evolució de cada exercici i el pes corporal (amb IMC i força relativa).
@@ -135,6 +137,71 @@ que els ports 80/443 hi són oberts.
    I a la consola del navegador, comprova que no hi hagi cap error
    `Refused to execute inline script` (indicaria una CSP mal configurada).
 
+## Sincronització WebDAV
+
+Les dades viuen a IndexedDB de cada navegador. **Treure la icona de la PWA i
+tornar-la a afegir esborra aquestes dades**; per actualitzar l'app n'hi ha
+prou amb l'avís «Hi ha una versió nova → Actualitza».
+
+Per tenir-les fora del dispositiu (i compartides entre dispositius), a
+**Ajustos → Sincronització WebDAV** cada usuari posa l'URL del seu WebDAV,
+l'usuari i la contrasenya, com a Zotero. «Verifica i activa» comprova
+l'accés, crea una carpeta `mygym/` a dins si no hi és i hi desa
+`mygym/mygym.json` (el mateix format que les còpies, més els esborrats).
+Després se sincronitza sola: en obrir l'app, en tornar-hi, en recuperar la
+xarxa i uns segons després de cada canvi. La fusió és la mateixa que la de
+les còpies (guanya el `updatedAt` més gran) i els esborrats es propaguen. En
+un dispositiu nou o reinstal·lat, posar-hi les mateixes dades ho baixa tot.
+
+Com que MY GYM és una web (Zotero és d'escriptori), el navegador imposa dues
+condicions al servidor WebDAV:
+
+- **HTTPS** (una pàgina HTTPS no pot cridar un servidor `http://`).
+- **CORS**: el servidor ha de respondre al preflight `OPTIONS` sense
+  autenticació i afegir aquestes capçaleres a totes les respostes:
+  ```
+  Access-Control-Allow-Origin: https://gym.<domini>
+  Access-Control-Allow-Methods: GET, PUT, PROPFIND, MKCOL, OPTIONS
+  Access-Control-Allow-Headers: Authorization, Content-Type, Depth
+  ```
+
+La CSP del vhost ho permet amb `connect-src 'self' https:`.
+
+Exemple d'un WebDAV propi amb nginx (`ngx_http_dav_module`, inclòs a la
+imatge oficial), un directori per usuari:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name dav.<domini>;
+
+    location / {
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin "https://gym.<domini>" always;
+            add_header Access-Control-Allow-Methods "GET, PUT, PROPFIND, MKCOL, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, Depth" always;
+            add_header Access-Control-Max-Age 86400 always;
+            return 204;
+        }
+        add_header Access-Control-Allow-Origin "https://gym.<domini>" always;
+
+        auth_basic "WebDAV";
+        auth_basic_user_file /etc/nginx/htpasswd;   # openssl passwd -6 → usuari:hash
+        root /srv/dav/$remote_user;
+        dav_methods PUT MKCOL;
+        create_full_put_path on;
+        client_max_body_size 20m;
+        # PROPFIND no és a ngx_http_dav_module: cal el mòdul dav-ext
+        # (paquet libnginx-mod-http-dav-ext a Debian/Ubuntu):
+        dav_ext_methods PROPFIND OPTIONS;
+    }
+}
+```
+
+Amb **Nextcloud**, l'URL és `https://<núvol>/remote.php/dav/files/<usuari>/`
+i és millor fer servir una contrasenya d'aplicació; les capçaleres CORS cal
+afegir-les al proxy invers que té al davant, perquè Nextcloud no les envia.
+
 ## Arquitectura (resum)
 
 - **Una sola pàgina** (`app/page.tsx`): les vistes «Avui / Historial /
@@ -144,6 +211,8 @@ que els ports 80/443 hi són oberts.
   reals (bug conegut de Windows amb segments RSC niuats, `<Suspense>`
   obligatori, normalització de barres al service worker...).
 - **Dades**: Dexie (IndexedDB), una sola taula `entries`. Vegeu `lib/`.
+  Els esborrats es registren a `deletions` perquè la sincronització
+  (`lib/sync.ts`, `lib/useAutoSync.ts`) no els faci ressuscitar.
 - **Service worker** (`sw/sw.template.js` + `scripts/postbuild.mjs`):
   escrit a mà (~40 línies), precache complet generat a partir del
   contingut real de `out/` en cada build, versionat pel hash del contingut.

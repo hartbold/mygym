@@ -1,4 +1,5 @@
-import { db } from "./db";
+import { db, recordDeletion } from "./db";
+import { nowMs } from "./dates";
 import { newId } from "./id";
 import type { Profile } from "./types";
 
@@ -17,8 +18,13 @@ export async function logBodyWeight(date: string, kg: number, now: number): Prom
   });
 }
 
-export async function deleteBodyWeight(id: string): Promise<void> {
-  await db.bodyWeights.delete(id);
+export async function deleteBodyWeight(id: string, now = nowMs()): Promise<void> {
+  await db.transaction("rw", db.bodyWeights, db.deletions, async () => {
+    const w = await db.bodyWeights.get(id);
+    if (!w) return;
+    await db.bodyWeights.delete(id);
+    await recordDeletion("bodyWeights", w.date, now);
+  });
 }
 
 /** `undefined` esborra l'alçada. */

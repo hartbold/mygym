@@ -1,5 +1,5 @@
-import { db } from "./db";
-import { localDateKey } from "./dates";
+import { db, recordDeletion } from "./db";
+import { localDateKey, nowMs } from "./dates";
 import { newId } from "./id";
 import type { Entry, EntrySet, ExerciseKind } from "./types";
 
@@ -160,6 +160,9 @@ export async function updateEntry(
   });
 }
 
-export async function deleteEntry(entryId: string): Promise<void> {
-  await db.entries.delete(entryId);
+export async function deleteEntry(entryId: string, now = nowMs()): Promise<void> {
+  await db.transaction("rw", db.entries, db.deletions, async () => {
+    await db.entries.delete(entryId);
+    await recordDeletion("entries", entryId, now);
+  });
 }

@@ -9,21 +9,23 @@ import { createTemplate } from "@/lib/templates";
 import { backupFileName, buildBackup, importBackup, parseBackupFile } from "@/lib/backup";
 import { db } from "@/lib/db";
 import { localDateKey, nowMs, parseDecimal } from "@/lib/dates";
-import { formatDayMonth } from "@/lib/format";
-import { useNow } from "@/lib/useNow";
+import { formatClock, formatDayMonth } from "@/lib/format";
 import {
-  CheckIcon,
-  ExportIcon,
-  ImportIcon,
-  InstallIcon,
-  PlusIcon,
-  QuestionIcon,
-  RulerIcon,
-  StorageIcon,
-  WarningIcon,
-} from "./icons";
+  createFolder,
+  folderUrl,
+  loadSyncConfig,
+  requestSync,
+  saveSyncConfig,
+  SyncError,
+  verifyServer,
+  type SyncConfig,
+} from "@/lib/sync";
+import { useSyncState } from "@/lib/useAutoSync";
+import { useNow } from "@/lib/useNow";
+import { confirmAction } from "./ConfirmHost";
+import { CheckIcon, ExportIcon, ImportIcon, InstallIcon, PlusIcon, RulerIcon, StorageIcon, WarningIcon, QuestionIcon } from "./icons";
 import { templateSummary } from "./TemplateSheet";
-import { List, ListItem, NavHeader, Page, Section } from "./ui";
+import { Button, CARD, FIELD, List, ListItem, NavHeader, Page, Section } from "./ui";
 
 const LAST_BACKUP_KEY = "mygym:lastBackupAt";
 
@@ -214,6 +216,8 @@ export function Settings({ onOpenTemplate }: { onOpenTemplate: (id: string) => v
 
         <TemplatesSection onOpenTemplate={onOpenTemplate} />
 
+        <SyncSection />
+
         <Section
           header="Còpia de seguretat"
           footer={
@@ -360,7 +364,7 @@ export function Settings({ onOpenTemplate }: { onOpenTemplate: (id: string) => v
               Codi a GitHub
             </a>
           </p>
-          <p>Les dades només es desen en aquest dispositiu.</p>
+          <p>Les dades es desen en aquest dispositiu i, si ho actives, al teu WebDAV.</p>
         </div>
       </div>
     </Page>
@@ -608,5 +612,190 @@ function TemplatesSection({ onOpenTemplate }: { onOpenTemplate: (id: string) => 
         </Section>
       )}
     </>
+  );
+}
+
+/** «avui a les 10:42», «ahir a les 22:05», «fa 3 dies». */
+function lastSyncLabel(ts: number, now: number): string {
+  const days = calendarDaysAgo(ts, now);
+  if (days <= 0) return `avui a les ${formatClock(ts)}`;
+  if (days === 1) return `ahir a les ${formatClock(ts)}`;
+  return `fa ${days} dies`;
+}
+
+function SyncStatusNote() {
+  const state = useSyncState();
+  const now = useNow();
+  if (state.error) {
+    return (
+      <p className="flex items-start gap-1.5 font-medium text-danger-ink">
+        <WarningIcon size={16} strokeWidth={2} className="mt-px shrink-0" />
+        <span className="min-w-0 break-words">{state.error}</span>
+      </p>
+    );
+  }
+  if (!state.lastSyncAt) return null;
+  const when = now > 0 ? lastSyncLabel(state.lastSyncAt, now) : formatDayMonth(localDateKey(state.lastSyncAt));
+  return <p>Última sincronització: {when}.</p>;
+}
+
+/**
+ * Sincronització amb un WebDAV propi, a l'estil de Zotero: URL, usuari i
+ * contrasenya; «Verifica i activa» comprova l'accés, crea la carpeta
+ * `mygym/` si cal i fa la primera sincronització (en un dispositiu buit, ho
+ * baixa tot). Després es manté sola (vegeu `useAutoSync`).
+ */
+function SyncSection() {
+  const [saved, setSaved] = useState<SyncConfig | null>(() =>
+    typeof window === "undefined" ? null : loadSyncConfig(),
+  );
+  const [url, setUrl] = useState(saved?.url ?? "");
+  const [user, setUser] = useState(saved?.user ?? "");
+  const [password, setPassword] = useState(saved?.password ?? "");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<Status | null>(null);
+  const dirty = !saved || url !== saved.url || user !== saved.user || password !== saved.password;
+  const active = saved?.enabled === true && !dirty;
+
+  function store(config: SyncConfig | null) {
+    saveSyncConfig(config);
+    setSaved(config);
+  }
+
+  async function onVerify() {
+    const config: SyncConfig = { enabled: false, url: url.trim(), user: user.trim(), password };
+    setUrl(config.url);
+    setUser(config.user);
+    setBusy(true);
+    setStatus(null);
+    try {
+      if ((await verifyServer(config)) === "missing-folder") {
+        const ok = await confirmAction({
+          title: "Vols crear la carpeta mygym?",
+          message: `No existeix ${folderUrl(config.url)}. Es crearà per desar-hi les dades.`,
+          confirmLabel: "Crea-la",
+        });
+        if (!ok) return;
+        await createFolder(config);
+      }
+      store({ ...config, enabled: true });
+      await requestSync();
+      setStatus({ tone: "ok", text: "Servidor verificat. La sincronització és activa." });
+    } catch (err) {
+      setStatus({
+        tone: "error",
+        text: err instanceof SyncError ? err.message : "No s'ha pogut verificar el servidor.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSyncNow() {
+    setBusy(true);
+    setStatus(null);
+    await requestSync();
+    setBusy(false);
+  }
+
+  function onDisable() {
+    if (saved) store({ ...saved, enabled: false });
+    setStatus({ tone: "ok", text: "Sincronització desactivada. Les dades del servidor no s'esborren." });
+  }
+
+  const label = "mb-1 block text-footnote font-medium text-label-2";
+  return (
+    <Section
+      header="Sincronització WebDAV"
+      footer={
+        <div className="space-y-2 text-pretty" role="status" aria-live="polite">
+          {status && (
+            <p
+              className={`flex items-start gap-1.5 font-medium ${
+                status.tone === "error" ? "text-danger-ink" : "text-label"
+              }`}
+            >
+              {status.tone === "error" ? (
+                <WarningIcon size={16} strokeWidth={2} className="mt-px shrink-0" />
+              ) : (
+                <CheckIcon size={16} strokeWidth={2.4} className="mt-px shrink-0" />
+              )}
+              <span className="min-w-0 break-words">{status.text}</span>
+            </p>
+          )}
+          {active && <SyncStatusNote />}
+          <p>
+            Desa les dades en una carpeta mygym/ del teu servidor WebDAV (Nextcloud, un de propi…) i
+            les manté al dia entre dispositius. El servidor ha de ser HTTPS i permetre CORS. La
+            contrasenya es desa en aquest dispositiu.
+          </p>
+        </div>
+      }
+    >
+      <div className={`${CARD} space-y-3 p-4`}>
+        <div>
+          <label htmlFor="sync-url" className={label}>
+            URL
+          </label>
+          <input
+            id="sync-url"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            autoCapitalize="off"
+            spellCheck={false}
+            placeholder="https://exemple.com/remote.php/dav/files/usuari/"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className={FIELD}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="min-w-0">
+            <label htmlFor="sync-user" className={label}>
+              Usuari
+            </label>
+            <input
+              id="sync-user"
+              autoComplete="username"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              className={FIELD}
+            />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="sync-password" className={label}>
+              Contrasenya
+            </label>
+            <input
+              id="sync-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={FIELD}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {active ? (
+            <>
+              <Button size="sm" onClick={() => void onSyncNow()} disabled={busy}>
+                {busy ? "Sincronitzant…" : "Sincronitza ara"}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={onDisable} disabled={busy}>
+                Desactiva
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={() => void onVerify()} disabled={busy || !url.trim()}>
+              {busy ? "Verificant…" : "Verifica i activa"}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Section>
   );
 }

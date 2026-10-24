@@ -1,4 +1,5 @@
-import { db } from "./db";
+import { db, recordDeletion } from "./db";
+import { nowMs } from "./dates";
 import { newId } from "./id";
 import type { Entry, PlannedSet, Template, TemplateExercise } from "./types";
 
@@ -40,8 +41,11 @@ export async function saveTemplate(template: Template, now: number): Promise<voi
   await db.templates.put({ ...template, updatedAt: now });
 }
 
-export async function deleteTemplate(id: string): Promise<void> {
-  await db.templates.delete(id);
+export async function deleteTemplate(id: string, now = nowMs()): Promise<void> {
+  await db.transaction("rw", db.templates, db.deletions, async () => {
+    await db.templates.delete(id);
+    await recordDeletion("templates", id, now);
+  });
 }
 
 export async function duplicateTemplate(id: string, now: number): Promise<string | undefined> {

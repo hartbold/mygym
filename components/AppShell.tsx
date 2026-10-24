@@ -17,6 +17,7 @@ import { lastOccurrence, selectToday } from "@/lib/sessions";
 import { draftFromSet, emptyDraft, parseSetDraft, type SetDraft } from "@/lib/set-draft";
 import type { Entry, ExerciseKind, Workout } from "@/lib/types";
 import { workoutEntryIds } from "@/lib/workouts";
+import { useAutoSync } from "@/lib/useAutoSync";
 import { useNow } from "@/lib/useNow";
 import { ConfirmHost } from "./ConfirmHost";
 import { EntryCard } from "./EntryCard";
@@ -227,6 +228,7 @@ export function AppShell() {
   const entries = liveEntries ?? [];
   const workout = useLiveQuery(() => db.workouts.toCollection().first(), []);
   const now = useNow();
+  useAutoSync();
   const [templateSheet, setTemplateSheet] = useState(false);
   const [addingToWorkout, setAddingToWorkout] = useState(false);
 

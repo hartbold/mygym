@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, recordDeletion } from "./db";
 import { localDateKey } from "./dates";
 import { newId } from "./id";
 import { plannedSet } from "./templates";
@@ -60,7 +60,7 @@ export function workoutEntryIds(w: Workout | undefined): Set<string> {
 }
 
 async function mutate(workoutId: string, now: number, fn: (w: Workout) => void | Promise<void>): Promise<void> {
-  await db.transaction("rw", db.workouts, db.entries, async () => {
+  await db.transaction("rw", db.workouts, db.entries, db.deletions, async () => {
     const w = await db.workouts.get(workoutId);
     if (!w) return;
     await fn(w);
@@ -143,6 +143,7 @@ export async function toggleSetDone(
       entry.sets = entry.sets.filter((s) => s.id !== set.entrySetId);
       if (entry.sets.length === 0) {
         await db.entries.delete(entry.id);
+        await recordDeletion("entries", entry.id, now);
         ex.entryId = undefined;
       } else {
         entry.endedAt = Math.max(entry.startedAt, ...entry.sets.map((s) => s.doneAt));

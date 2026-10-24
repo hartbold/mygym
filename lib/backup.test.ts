@@ -36,7 +36,7 @@ describe("validateBackup", () => {
   });
 
   it("rejects an unknown format version", () => {
-    const result = validateBackup({ app: "mygym", formatVersion: 3, exportedAt: "x", data: { entries: [] } });
+    const result = validateBackup({ app: "mygym", formatVersion: 4, exportedAt: "x", data: { entries: [] } });
     expect(result.ok).toBe(false);
   });
 
@@ -76,7 +76,7 @@ describe("importBackup (merge-only)", () => {
   it("adds entries with unknown ids", async () => {
     const envelope = buildBackup([entry({ id: "new-1" })], 5000);
     const summary = await importBackup(envelope);
-    expect(summary).toEqual({ added: 1, updated: 0, skipped: 0 });
+    expect(summary).toEqual({ added: 1, updated: 0, skipped: 0, removed: 0 });
     expect(await db.entries.get("new-1")).toBeDefined();
   });
 
